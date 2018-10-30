@@ -1,6 +1,15 @@
 /* global jQuery Snap  */
 (function ($, Snap, window) {
 
+    function setGroup(paper, list, className) {
+        var node = paper.g.apply(paper, list);
+        node.attr({
+            'class': className
+        });
+
+        return node;
+    }
+
     function Processflow(options) {
         this.config = {
             component: $.extend(true, {}, Processflow.component),
@@ -11,7 +20,11 @@
         this.$svg;
         this.svg;
         this.paper;
-        this.elements = [];
+        this.elements = {
+            component: null,
+            process: null
+        };
+        this.cache;
 
         this.create();
     }
@@ -88,6 +101,10 @@
                 stroke: '#C1C1C1',
                 strokeWidth: 1
             }
+        },
+        className: {
+            component: 'procesflow-component',
+            panel: 'procesflow-component-panel'
         }
     };
 
@@ -97,7 +114,8 @@
                 name: 'id',
                 attr: {
                     'font-size': 12,
-                    'fill': '#333'
+                    'fill': '#333',
+                    'cursor': 'pointer'
                 }
             },
             index: {
@@ -159,23 +177,24 @@
             attr: {
                 stroke: '#4695F9',
                 strokeWidth: 1,
-                fill: '#ffffff'
+                fill: '#ffffff',
+                cursor: 'pointer'
             },
             state: {
                 new: {
-                    fill: '#ffffff'
+                    fill: '#CCCCCC'
                 },
                 audit: {
-                    fill: '#ffffff'
+                    fill: '#C73AF6'
                 },
                 audited: {
-                    fill: '#ffffff'
+                    fill: '#5B9CFE'
                 },
                 dispatched: {
-                    fill: '#ffffff'
+                    fill: '#DCD079'
                 },
                 machining: {
-                    fill: '#ffffff'
+                    fill: '#F9CC9D'
                 },
                 pause: {
                     fill: '#E45C44'
@@ -191,13 +210,22 @@
                 stroke: '#4695F9',
                 strokeWidth: 1
             }
+        },
+        className: {
+            main: 'procesflow-process-node-main',
+            top: 'processflow-process-node-top',
+            bottom: 'processflow-process-node-bottom',
+            node: 'processflow-process-node',
+            line: 'processflow-process-line',
+            process: 'processflow-process',
+            panel: 'processflow-process-panel'
         }
 
     };
 
     Processflow.prototype.create = function () {
         if (this.$container.length > 0) {
-            this.svg = Snap(1000, 1000);
+            this.svg = Snap(2000, 1000);
             this.paper = this.svg.paper;
             this.$svg = $(this.svg.node);
             this.$svg.appendTo(this.$container);
@@ -209,23 +237,31 @@
 
     Processflow.prototype.createFlowPanels = function () {
         var data = this.data.processflow,
-            config = this.config.component,
-            height = config.height,
-            x = config.x,
-            y = config.y;
-
+            height = this.config.component.height,
+            x = this.config.component.x,
+            y = this.config.component.y,
+            componentNodes = [],
+            processNodes = [],
+            panel;
+     
         for (var i = 0, len = data.length; i < len; i++) {
-            this.elements.push(new processflowPanel(this.paper, data[i], this.config, x, y + i * height));
+            panel = new processflowPanel(this.paper, data[i], this.config, x, y + i * height, this.cache);
+            componentNodes.push(panel.component.element);
+            processNodes.push(panel.flowChart.element);
         }
+
+        this.elements.component = setGroup(this.paper, componentNodes, this.config.component.className.panel);
+        this.elements.process = setGroup(this.paper, processNodes, this.config.process.className.panel);
     };
 
-    function processflowPanel(paper, data, config, x, y) {
+    function processflowPanel(paper, data, config, x, y, cache) {
         this.paper = paper;
         this.data = data;
         this.element;
         this.config = config;
         this.x = x;
         this.y = y;
+        this.cache = cache;
 
         this.element = this.create();
     }
@@ -234,8 +270,8 @@
         var c_config = this.config.component,
             p_config = this.config.process;
 
-        this.component = new Component(this.paper, this.data.component, c_config, this.x, this.y);
-        this.flowChart = new FlowChart(this.paper, this.data.process, p_config, this.x + c_config.width, this.y + Math.floor(c_config.height / 2));
+        this.component = new Component(this.paper, this.data.component, c_config, this.x, this.y, this.cache);
+        this.flowChart = new FlowChart(this.paper, this.data.process, p_config, this.x + c_config.width, this.y + Math.floor(c_config.height / 2), this.cache);
 
         return {
             component: this.component,
@@ -243,20 +279,22 @@
         };
     };
 
-    function Component(paper, data, config, x, y) {
+    function Component(paper, data, config, x, y, cache) {
         this.paper = paper;
         this.data = data;
-        this.elememt;
         this.x = x;
         this.y = y;
         this.config = config;
+        this.element;
         this.elements = {
             texts: [],
             line: null
         };
         this.endY;
+        this.cache = cache;
 
-        this.elememt = this.create();
+        this.element = this.create();
+
     }
 
     Component.prototype.create = function () {
@@ -264,10 +302,15 @@
             info = config.format,
             padding = config.padding,
             x = this.x + padding,
-            y = this.y + padding;
+            y = this.y + padding,
+            node;
 
         this.renderVText(x, y, info);
         this.renderLine();
+
+        node = setGroup(this.paper, this.elements.texts.concat([this.elements.line]), this.config.className.component);
+
+        return node;
     };
 
     Component.prototype.renderVText = function (x, y, info) {
@@ -315,26 +358,15 @@
         }
     };
 
-    // Component.prototype.renderLine = function () {
-    //     var config = this.config,
-    //         offsetY = config.offsetY,
-    //         padding = config.padding,
-    //         startX = config.x,
-    //         startY = this.endY + offsetY + padding,
-    //         endX = startX + config.width,
-    //         endY = startY,
-    //         element;
-
-    //     element = this.paper.line(startX, startY, endX, endY);
-    //     element.attr(config.line.attr);
-    //     this.elements.line = element;
-    // };
-
     Component.prototype.renderLine = function () {
         var config = this.config,
-            element;
+            element,
+            startX = config.x,
+            startY = this.y + config.height,
+            endX = config.width,
+            endY = startY;
 
-        element = this.paper.line(config.x, config.height, config.width, config.height);
+        element = this.paper.line(startX, startY, endX, endY);
         element.attr(config.line.attr);
         this.elements.line = element;
     };
@@ -363,97 +395,162 @@
         return element;
     };
 
-    function FlowChart(paper, data, config, x, y) {
-        debugger;
+    function FlowChart(paper, data, config, x, y, cache) {
         this.paper = paper;
         this.data = data;
         this.x = x;
         this.y = y;
         this.config = config;
         this.elements = {
-            node: [],
-            line: [],
-            text: []
+            nodes: [],
+            lines: []
         };
+        this.element;
+        this.cache;
 
-        this.create();
+        this.element = this.create();
     }
 
     FlowChart.prototype.create = function () {
         var data = this.data,
-            item,
+            info,
             startX = this.x,
             startY = this.y,
             config = this.config,
             nodeWidth = config.node.width,
-            lineWidth = config.line.width;
+            lineWidth = config.line.width,
+            node;
 
         for (var i = 0, len = data.length; i < len; i++) {
-            item = data[i];
-            if (i == 0) {
-                this.renderNode(startX, startY, item);
-            }
-            else {
-                debugger;
-                this.renderLine(startX + nodeWidth + (i - 1) * (nodeWidth + lineWidth), startY);
-                this.renderNode(startX + i * (nodeWidth + lineWidth), startY, item);
+            info = data[i];
+            this.elements.nodes.push(this.renderNode(startX + i * (nodeWidth + lineWidth), startY, info));
+            if (i > 0) {
+                this.elements.lines.push(this.renderLine(startX + nodeWidth + (i - 1) * (nodeWidth + lineWidth), startY));
             }
         }
+
+        node = setGroup(this.paper, this.elements.nodes.concat(this.elements.lines), this.config.className.process);
+
+        return node;
     };
 
     FlowChart.prototype.renderNode = function (x, y, info) {
-        var n_config = this.config.node,
-            t_config = this.config.text,
-            width = n_config.width,
-            height = n_config.height,
-            order = this.config.order,
-            padding = n_config.padding,
-            startX = x,
-            startY = y,
-            r_startY = startY - height / 2,
-            t_startX = startX + width / 2,
-            t_startY = startY + padding,
-            element,
-            i,
-            name,
-            len;
+        var mainNode,
+            topNode,
+            bottomNode,
+            node;
+
+        mainNode = this.renderMainNode(x, y, info);
+        topNode = this.renderSecondaryNode(x, y, 'top', info);
+        bottomNode = this.renderSecondaryNode(x, y, 'bottom', info);
+        node = setGroup(this.paper, [mainNode, topNode, bottomNode], this.config.className.node);
+
+        this.bindMainNodeEvent(mainNode, info);
+
+        return node;
+    };
+
+    FlowChart.prototype.renderMainNode = function (x, y, info) {
+        var order = this.config.order,
+            config = this.config,
+            width = config.node.width,
+            height = config.node.height,
+            padding = config.node.padding,
+            rectElement,
+            textElement,
+            state = {},
+            node;
 
         //rect
-        element = this.paper.rect(startX, r_startY, width, height, 4);
-        element.attr(n_config.attr);
-        this.elements.node.push(element);
-
+        rectElement = this.paper.rect(x, y - height / 2, width, height, 4);
+        state = config.node.state[this.getInfo(order.middle, info).state] || {};
+        rectElement.attr($.extend({}, config.node.attr, state));
         //text
-        this.renderText(t_startX, t_startY, order.middle, info);
+        textElement = this.renderText(x + width / 2, y + padding, order.middle, info);
+        node = setGroup(this.paper, [rectElement, textElement], this.config.className.main);
 
-        //top text
-        for (i = 0, len = order.top.length; i < len; i++) {
-            name = order.top[i];
-            this.renderText(t_startX, t_startY - (t_config.offsetY) * (i + 1), name, info);
+        return node;
+    };
+
+
+    FlowChart.prototype.bindMainNodeEvent = function (element, info) {
+        element.click(function () {
+            console.dir(info);
+        });
+    };
+
+    FlowChart.prototype.renderSecondaryNode = function (x, y, type, info) {
+        var name,
+            order = this.config.order,
+            list = order[type],
+            sign = type === 'top' ? -1 : 1,
+            config = this.config,
+            startX = x + config.node.width / 2,
+            startY,
+            nodes = [],
+            node;
+
+        for (var i = 0, len = list.length; i < len; i++) {
+            name = list[i];
+            startY = y + config.node.height / 4 + sign * (config.text.offsetY) * (i + 1);
+            nodes.push(this.renderText(startX, startY, name, info));
         }
 
-        //bottom text
-        for (i = 0, len = order.bottom.length; i < len; i++) {
-            name = order.bottom[i];
-            this.renderText(t_startX, t_startY + (t_config.offsetY) * (i + 1), name, info);
+        node = setGroup(this.paper, nodes, this.config.className[type]);
+
+        return node;
+    };
+
+    FlowChart.prototype.getInfo = function (name, info) {
+        var map = this.config.map,
+            _info = info[map[name]] || null;
+
+        if (!_info) {
+            return {
+                text: '',
+                state: ''
+            };
         }
+        else if (typeof _info !== 'object') {
+            return {
+                text: _info,
+                state: ''
+            };
+        }
+        else {
+            return _info;
+        }
+
+    };
+
+    FlowChart.prototype.getState = function (name, info) {
+        var properties = this.config.property,
+            property = properties[name],
+            state = {};
+
+        if (property.state && typeof info === 'object') {
+            state = property.state[info.state] || {};
+        }
+
+        return state;
     };
 
     FlowChart.prototype.renderText = function (x, y, name, info) {
         var element,
-            properties = this.config.property,
-            property = properties[name],
-            map = this.config.map,
-            text = info[map[name]] || null;
+            property = this.config.property[name],
+            information = this.getInfo(name, info),
+            state = {};
 
-        if (text) {
-            element = this.paper.text(x, y, text);
-            element.attr($.extend({}, {
-                'text-anchor': 'middle'
-            }, property.attr));
-
-            this.elements.text.push(element);
+        if (property.state) {
+            state = property.state[information.state] || {};
         }
+
+        element = this.paper.text(x, y, information.text);
+        element.attr($.extend({}, {
+            'text-anchor': 'middle'
+        }, property.attr, state));
+
+        return element;
     };
 
     FlowChart.prototype.renderLine = function (x, y) {
@@ -466,7 +563,9 @@
 
         element = this.paper.line(startX, startY, endX, endY);
         element.attr(config.attr);
-        this.elements.line.push(element);
+
+        return element;
+
     };
 
     function Flowline($, Snap) {
