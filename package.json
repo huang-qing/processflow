@@ -1,0 +1,27 @@
+{
+  "name": "processflow",
+  "version": "1.0.0",
+  "description": "工艺流程图",
+  "main": "index.js",
+  "dependencies": {
+    "eslint": "^5.7.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/huang-qing/processflow.git"
+  },
+  "keywords": [
+    "process",
+    "flow"
+  ],
+  "author": "huangqing",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/huang-qing/processflow/issues"
+  },
+  "homepage": "https://github.com/huang-qing/processflow#readme"
+}
