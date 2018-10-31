@@ -27,6 +27,8 @@
         this.cache;
 
         this.create();
+        this.resize();
+        this.bindEvent();
     }
 
     Processflow.component = {
@@ -225,14 +227,70 @@
 
     Processflow.prototype.create = function () {
         if (this.$container.length > 0) {
-            this.svg = Snap(2000, 1000);
-            this.paper = this.svg.paper;
-            this.$svg = $(this.svg.node);
-            this.$svg.appendTo(this.$container);
+
+            this.size = this.getSvgSize();
+
+            this.componentSvg = Snap(this.size.component.width, this.size.component.height);
+            this.processSvg = Snap(this.size.process.width, this.size.process.height);
+
+            this.componentPaper = this.componentSvg.paper;
+            this.processPaper = this.processSvg.paper;
+
+            this.$componentSvg = $(this.componentSvg.node);
+            this.$processSvg = $(this.processSvg.node);
+
+            this.$componentContainer = $('<div class="processflow-component-container"></div>');
+            this.$processContainer = $('<div class="processflow-process-container"></div>');
+
+            this.$componentContainer.append(this.$componentSvg);
+            this.$processContainer.append(this.$processSvg);
+            this.$container.append(this.$componentContainer);
+            this.$container.append(this.$processContainer);
             this.$container.addClass('processflow');
 
             this.createFlowPanels();
         }
+    };
+
+    Processflow.prototype.getSvgSize = function () {
+        var count = this.data.processflow.length,
+            c_height = this.config.component.height,
+            c_width = this.config.component.width,
+            height = c_height * count;
+
+        return {
+            component: {
+                width: c_width,
+                height: height
+            },
+            process: {
+                width: 1000,
+                height: height
+            }
+        };
+    };
+
+    Processflow.prototype.resize = function () {
+        var container = this.$container,
+            component = this.$componentContainer,
+            process = this.$processContainer,
+            size = this.size,
+            containerWidth = container.width(),
+            containerHeight = container.parent().height();
+
+        container.css({
+            height: containerHeight
+        });
+
+        component.css({
+            width: size.component.width,
+            height: containerHeight
+        });
+
+        process.css({
+            width: containerWidth - size.component.width - (containerHeight < size.component.height ? 22 : 1),
+            height: containerHeight
+        });
     };
 
     Processflow.prototype.createFlowPanels = function () {
@@ -243,19 +301,30 @@
             componentNodes = [],
             processNodes = [],
             panel;
-     
+
         for (var i = 0, len = data.length; i < len; i++) {
-            panel = new processflowPanel(this.paper, data[i], this.config, x, y + i * height, this.cache);
+            panel = new processflowPanel(this.componentPaper, this.processPaper, data[i], this.config, x, y + i * height, this.cache);
             componentNodes.push(panel.component.element);
             processNodes.push(panel.flowChart.element);
         }
 
-        this.elements.component = setGroup(this.paper, componentNodes, this.config.component.className.panel);
-        this.elements.process = setGroup(this.paper, processNodes, this.config.process.className.panel);
+        this.elements.component = setGroup(this.componentPaper, componentNodes, this.config.component.className.panel);
+        this.elements.process = setGroup(this.processPaper, processNodes, this.config.process.className.panel);
     };
 
-    function processflowPanel(paper, data, config, x, y, cache) {
-        this.paper = paper;
+    Processflow.prototype.bindEvent = function () {
+        var process = this.$processContainer,
+            component = this.$componentContainer;
+
+        process.scroll(function () {
+            var top = this.scrollTop;
+            component.css('margin-top', -1 * top);
+        });
+    };
+
+    function processflowPanel(componentPaper, processPaper, data, config, x, y, cache) {
+        this.componentPaper = componentPaper;
+        this.processPaper = processPaper;
         this.data = data;
         this.element;
         this.config = config;
@@ -270,8 +339,8 @@
         var c_config = this.config.component,
             p_config = this.config.process;
 
-        this.component = new Component(this.paper, this.data.component, c_config, this.x, this.y, this.cache);
-        this.flowChart = new FlowChart(this.paper, this.data.process, p_config, this.x + c_config.width, this.y + Math.floor(c_config.height / 2), this.cache);
+        this.component = new Component(this.componentPaper, this.data.component, c_config, this.x, this.y, this.cache);
+        this.flowChart = new FlowChart(this.processPaper, this.data.process, p_config, this.x + 2, this.y + Math.floor(c_config.height / 2), this.cache);
 
         return {
             component: this.component,
@@ -294,7 +363,6 @@
         this.cache = cache;
 
         this.element = this.create();
-
     }
 
     Component.prototype.create = function () {
