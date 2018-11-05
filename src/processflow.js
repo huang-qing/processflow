@@ -10,6 +10,14 @@
         return node;
     }
 
+    var guid = function guid() {
+        var i = 1;
+
+        return function () {
+            return i++;
+        };
+    }();
+
     function Processflow(options) {
         this.config = {
             component: $.extend(true, {}, Processflow.component),
@@ -22,12 +30,14 @@
         this.paper;
         this.elements = {
             component: null,
-            process: null
+            process: null,
+            line: null
         };
         this.cache;
 
         this.create();
         this.resize();
+        this.createFlowline();
         this.bindEvent();
     }
 
@@ -91,13 +101,6 @@
             weight: 'weight',
             type: 'type'
         },
-        width: 200,
-        height: 120,
-        offsetX: 12,
-        offsetY: 20,
-        x: 0,
-        y: 0,
-        padding: 6,
         line: {
             attr: {
                 stroke: '#C1C1C1',
@@ -107,7 +110,14 @@
         className: {
             component: 'procesflow-component',
             panel: 'procesflow-component-panel'
-        }
+        },
+        width: 200,
+        height: 120,
+        offsetX: 12,
+        offsetY: 20,
+        x: 0,
+        y: 0,
+        padding: 6
     };
 
     Processflow.process = {
@@ -210,7 +220,8 @@
             width: 12 * 6,
             attr: {
                 stroke: '#4695F9',
-                strokeWidth: 1
+                strokeWidth: 1,
+                fill: 'none'
             }
         },
         className: {
@@ -221,7 +232,8 @@
             line: 'processflow-process-line',
             process: 'processflow-process',
             panel: 'processflow-process-panel'
-        }
+        },
+        id: 'unique'
 
     };
 
@@ -252,6 +264,12 @@
         }
     };
 
+    Processflow.prototype.createFlowline = function (paper, data) {
+        var flowline = new Flowline(this.processPaper, this.elements.process, this.data.flowline, this.config.process);
+
+        flowline.render();
+    };
+
     Processflow.prototype.getSvgSize = function () {
         var count = this.data.processflow.length,
             c_height = this.config.component.height,
@@ -264,7 +282,7 @@
                 height: height
             },
             process: {
-                width: 1000,
+                width: 10000,
                 height: height
             }
         };
@@ -417,6 +435,7 @@
             startX = x + i * offsetX;
             startY = y;
             width = 0;
+
             if (element) {
                 bbox = element.getBBox();
                 width = bbox.width;
@@ -491,34 +510,38 @@
 
         for (var i = 0, len = data.length; i < len; i++) {
             info = data[i];
-            this.elements.nodes.push(this.renderNode(startX + i * (nodeWidth + lineWidth), startY, info));
-            if (i > 0) {
-                this.elements.lines.push(this.renderLine(startX + nodeWidth + (i - 1) * (nodeWidth + lineWidth), startY));
-            }
+            this.elements.nodes.push(this.renderNode(startX + i * (nodeWidth + lineWidth), startY, info, i + 1));
         }
 
         node = setGroup(this.paper, this.elements.nodes.concat(this.elements.lines), this.config.className.process);
-
+        node.attr({
+            'data-flowlinecount': 1,
+            'data-id': guid()
+        });
         return node;
     };
 
-    FlowChart.prototype.renderNode = function (x, y, info) {
+    FlowChart.prototype.renderNode = function (x, y, info, index) {
         var mainNode,
             topNode,
             bottomNode,
             node;
 
-        mainNode = this.renderMainNode(x, y, info);
+        mainNode = this.renderMainNode(x, y, info, index);
         topNode = this.renderSecondaryNode(x, y, 'top', info);
         bottomNode = this.renderSecondaryNode(x, y, 'bottom', info);
         node = setGroup(this.paper, [mainNode, topNode, bottomNode], this.config.className.node);
-
+        node.attr({
+            'data-index': index,
+            'data-path': this.getPath(index),
+            'data-id': this.getInfo(this.config.id, info).text
+        });
         this.bindMainNodeEvent(mainNode, info);
 
         return node;
     };
 
-    FlowChart.prototype.renderMainNode = function (x, y, info) {
+    FlowChart.prototype.renderMainNode = function (x, y, info, index) {
         var order = this.config.order,
             config = this.config,
             width = config.node.width,
@@ -540,6 +563,15 @@
         return node;
     };
 
+    FlowChart.prototype.getPath = function (index) {
+        var path = [];
+
+        for (var i = 0, len = index; i < len; i++) {
+            path.push(i + 1);
+        }
+
+        return path.join('-');
+    };
 
     FlowChart.prototype.bindMainNodeEvent = function (element, info) {
         element.click(function () {
@@ -621,24 +653,290 @@
         return element;
     };
 
-    FlowChart.prototype.renderLine = function (x, y) {
-        var config = this.config.line,
-            startX = x,
-            startY = y,
-            endX = x + config.width,
-            endY = startY,
+    function Flowline(paper, element, data, config) {
+        this.paper = paper;
+        this.data = data;
+        this.element = element;
+        this.config = config;
+    }
+
+    Flowline.prototype.render = function () {
+        this.adjustProcessNode();
+        this.renderAllLine();
+    };
+
+    Flowline.prototype.sortData = function () {
+        var i, j, len, jlen,
+            a, b,
+            line,
+            data = this.data,
+            temp;
+
+        if (!data) {
+            return;
+        }
+
+        for (i = 0, len = data.length; i < len; i++) {
+            line = data[i];
+            line.index = parseInt(this.element.select('[data-id="' + line.start + '"]').attr('data-index'));
+        }
+
+        for (i = 0, len = data.length; i < len - 1; i++) {
+
+            for (j = 1, jlen = len; j < jlen; j++) {
+                a = data[j - 1];
+                b = data[j];
+                if (a.index > b.index) {
+                    temp = data[j];
+                    data[j] = data[j - 1];
+                    data[j - 1] = temp;
+                }
+            }
+        }
+    };
+
+    Flowline.prototype.adjustProcessNode = function () {
+        var line,
+            data = this.data || [];
+
+        this.sortData();
+        for (var i = 0, len = data.length; i < len; i++) {
+            line = data[i];
+            this.adjustNode(line);
+        }
+    };
+
+    Flowline.prototype.adjustNode = function (line) {
+        var config = this.config,
+            element = this.element,
+            fromNode = element.select('[data-id="' + line.start + '"]'),
+            toNode = element.select('[data-id="' + line.end + '"]'),
+            fromNodeBox = fromNode.getBBox(),
+            toNodeBox = toNode.getBBox(),
+            offsetX = config.node.width + config.line.width;
+
+        this.setNodeState(fromNode, toNode);
+
+        if (fromNodeBox.x === toNodeBox.x) {
+            this.translateNodeX(toNode, offsetX);
+        }
+        else if (fromNodeBox.x + offsetX < toNodeBox.x) {
+            this.translateNodeX(this.getNextNode(fromNode), toNodeBox.x - fromNodeBox.x - offsetX);
+        }
+        else if (fromNodeBox.x > toNodeBox.x) {
+            this.translateNodeX(toNode, fromNodeBox.x + offsetX - toNodeBox.x);
+        }
+    };
+
+    Flowline.prototype.setNodeState = function (fromNode, toNode) {
+        var fromProcessId = fromNode.parent().attr('data-id'),
+            toProcessId = toNode.parent().attr('data-id'),
+            toId = toNode.attr('data-id');
+
+
+        fromNode.attr({
+            'data-state': 'out',
+            'data-from-process': fromProcessId,
+            'data-to-process': toProcessId,
+            'data-to': toId
+        });
+
+        toNode.attr({
+            'data-state': 'in',
+            'data-from-process': fromProcessId,
+            'data-to-process': toProcessId
+        });
+    };
+
+    Flowline.prototype.getNextNode = function (node) {
+        var index = node.attr('data-index'),
+            nextIndex = parseInt(index) + 1;
+
+        return node.parent().select('[data-index="' + nextIndex + '"]');
+    };
+
+    Flowline.prototype.getPrevNode = function (node) {
+        var index = node.attr('data-index'),
+            prevIndex = parseInt(index) - 1;
+
+        return node.parent().select('[data-index="' + prevIndex + '"]');
+    };
+
+    Flowline.prototype.translateNodeX = function (node, offsetX) {
+        var nodes,
+            m,
+            dx,
+            currentNode;
+
+        nodes = node.parent().selectAll('[data-path^="' + node.attr('data-path') + '"]');
+        // 位移
+        for (var i = 0, len = nodes.items.length; i < len; i++) {
+            currentNode = nodes[i];
+            dx = currentNode.attr('data-dx') || 0;
+            if (isNaN(dx)) {
+                dx = 0;
+            }
+            else {
+                dx = parseInt(dx);
+            }
+            dx += offsetX;
+            m = new Snap.Matrix();
+            m.translate(dx, 0);
+            currentNode.attr('data-dx', dx);
+            currentNode.transform(m);
+        }
+    };
+
+    Flowline.prototype.renderAllLine = function () {
+        var rootNodes = this.element.selectAll('[data-index="1"]'),
+            node;
+
+        for (var i = 0, len = rootNodes.length; i < len; i++) {
+            node = rootNodes[i];
+            this.renderLine(node, {
+                id: node.parent().attr('data-id'),
+                out: false,
+                back: false,
+                count: 1
+            });
+        }
+    };
+
+    Flowline.prototype.renderLine = function (node, info) {
+        var nextNode,
+            nodeState,
+            toProcessId,
+            fromProcessId,
+            isOut = false,
+            isBack = false;
+
+        if (!node) {
+            return;
+        }
+   
+        nodeState = node.attr('data-state');
+        toProcessId = node.attr('data-to-process');
+        fromProcessId = node.attr('data-from-process');
+
+        //判断是否拆过件
+        if (nodeState === 'out') {
+            isOut = fromProcessId === info.id && info.out === false;
+            isBack = toProcessId == info.id && info.out === true;
+        }
+        //计算合件的次数
+        else if (nodeState === 'in' && toProcessId === info.id) {
+            info.count++;
+        }
+
+        if (nodeState === 'out' && (isOut || isBack)) {
+            if (info.count > 1) {
+                nextNode = this.getNextNode(node);
+                this.renderStraightLine(node, nextNode);
+                this.renderLine(nextNode, info);
+            }
+            else {
+                //合并后无法区分是拆件还是整体移件，全部按照拆件处理，实际的工艺由人工判断
+                this.count--;
+
+                nextNode = this.element.select('[data-id="' + node.attr('data-to') + '"]');
+                this.renderBrokenLine(node, nextNode);
+                if (isOut) {
+                    info.out = true;
+                }
+                else {
+                    info.out = false;
+                }
+                this.renderLine(nextNode, info);
+            }
+        }
+        else {
+            nextNode = this.getNextNode(node);
+            this.renderStraightLine(node, nextNode);
+            this.renderLine(nextNode, info);
+        }
+
+        //横向的连线全部连上，项目要求，没有任何逻辑，个人认为对流程图是个破坏，让流程图表述不清晰
+        // nextNode = this.getNextNode(node);
+        // this.renderStraightLine(node, nextNode);
+        // this.renderLine(nextNode, processId);
+    };
+
+    Flowline.prototype.getPositionInfo = function (node, nextNode) {
+        var nodeBox,
+            nextNodeBox,
+            startX,
+            startY,
+            endX,
+            endY,
+            rect,
+            nextRect;
+
+        if (!node || !nextNode) {
+            return null;
+        }
+
+        rect = node.select('.' + this.config.className.main);
+        nextRect = nextNode.select('.' + this.config.className.main);
+
+        nodeBox = rect.getBBox();
+        nextNodeBox = nextRect.getBBox();
+        startX = nodeBox.x + nodeBox.width + (parseInt(node.attr('data-dx')) || 0);
+        startY = nodeBox.y + nodeBox.height / 2;
+        endX = nextNodeBox.x + (parseInt(nextNode.attr('data-dx')) || 0);
+        endY = nextNodeBox.y + nodeBox.height / 2;
+
+        return {
+            x1: startX,
+            y1: startY,
+            x2: endX,
+            y2: endY
+        };
+    };
+
+    Flowline.prototype.renderStraightLine = function (node, nextNode) {
+        var position,
             element;
 
-        element = this.paper.line(startX, startY, endX, endY);
-        element.attr(config.attr);
+        if (!node || !nextNode) {
+            return null;
+        }
+
+        position = this.getPositionInfo(node, nextNode);
+
+        element = this.paper.line(position.x1, position.y1, position.x2, position.y2);
+        element.attr(this.config.line.attr);
 
         return element;
 
     };
 
-    function Flowline($, Snap) {
+    Flowline.prototype.renderBrokenLine = function (node, nextNode) {
+        var position,
+            x1,
+            y1,
+            x2,
+            y3,
+            x4,
+            path,
+            element;
 
-    }
+        if (!node || !nextNode) {
+            return null;
+        }
+
+        position = this.getPositionInfo(node, nextNode);
+        x1 = position.x1;
+        y1 = position.y1;
+        x2 = position.x2 - this.config.line.width / 2;
+        y3 = position.y2;
+        x4 = position.x2;
+        path = ['M', x1, ' ', y1, 'H', x2, 'V', y3, 'H', x4].join('');
+
+        element = this.paper.path(path);
+        element.attr(this.config.line.attr);
+
+        return element;
+    };
 
     function Menu($) {
 

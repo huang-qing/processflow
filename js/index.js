@@ -1,5 +1,63 @@
 /* global $  Processflow */
 $(function () {
+
+    var flowline1 = [
+        {
+            start: '1038',
+            end: '1056'
+        },
+        {
+            start: '1073',
+            end: '1058'
+        },
+        {
+            start: '1058',
+            end: '1039'
+        },
+        {
+            start: '1059',
+            end: '1074'
+        }
+    ];
+
+    var flowline2 = [
+        {
+            start: '1073',
+            end: '1056'
+        },
+        {
+            start: '1059',
+            end: '1074'
+        },
+        {
+            start: '1038',
+            end: '1056'
+        },
+        {
+            start: '1076',
+            end: '1039'
+        }
+    ];
+
+    var flowline3 = [
+        {
+            start: '1038',
+            end: '1056'
+        },
+        {
+            start: '1073',
+            end: '1057'
+        },
+        {
+            start: '1058',
+            end: '1039'
+        },
+        {
+            start: '1059',
+            end: '1074'
+        }
+    ];
+
     var processflow = new Processflow({
         query: '#processflow',
         data: {
@@ -40,7 +98,7 @@ $(function () {
                                 text: 'R332',
                                 state: 'audited'
                             },
-                            index: 1,
+                            index: 3,
                             unique: {
                                 text: '1039',
                                 state: 'uploaded'
@@ -52,7 +110,7 @@ $(function () {
                                 text: 'IH2',
                                 state: 'dispatched'
                             },
-                            index: 2,
+                            index: 4,
                             unique: '1040',
                             equipment: '设备1',
                             plandate: '2018-10-11'
@@ -61,7 +119,7 @@ $(function () {
                                 text: 'R3023',
                                 state: 'machining'
                             },
-                            index: 1,
+                            index: 5,
                             unique: '1041',
                             equipment: '设备1',
                             plandate: '2018-10-11'
@@ -70,7 +128,7 @@ $(function () {
                                 text: 'IH8',
                                 state: 'pause'
                             },
-                            index: 2,
+                            index: 6,
                             unique: '1042',
                             equipment: '设备1',
                             plandate: '2018-10-11'
@@ -79,7 +137,7 @@ $(function () {
                                 text: 'IH88',
                                 state: 'complete'
                             },
-                            index: 2,
+                            index: 7,
                             unique: '1049',
                             equipment: '设备1',
                             plandate: '2018-10-11'
@@ -110,25 +168,25 @@ $(function () {
                             plandate: '2018-10-11'
                         }, {
                             id: 'R332',
-                            index: 1,
+                            index: 3,
                             unique: '1057',
                             equipment: '设备3',
                             plandate: '2018-10-11'
                         }, {
                             id: 'IH2',
-                            index: 2,
+                            index: 4,
                             unique: '1058',
                             equipment: '设备1',
                             plandate: '2018-10-11'
                         }, {
                             id: 'R3023',
-                            index: 1,
+                            index: 5,
                             unique: '1059',
                             equipment: '设备1',
                             plandate: '2018-10-11'
                         }, {
                             id: 'IH8',
-                            index: 2,
+                            index: 6,
                             unique: '1060',
                             equipment: '设备1',
                             plandate: '2018-10-11'
@@ -159,25 +217,25 @@ $(function () {
                             plandate: '2018-10-11'
                         }, {
                             id: 'R332',
-                            index: 1,
+                            index: 3,
                             unique: '1073',
                             equipment: '设备3',
                             plandate: '2018-10-11'
                         }, {
                             id: 'IH2',
-                            index: 2,
+                            index: 4,
                             unique: '1074',
                             equipment: '设备1',
                             plandate: '2018-10-11'
                         }, {
                             id: 'R3023',
-                            index: 1,
+                            index: 5,
                             unique: '1075',
                             equipment: '设备1',
                             plandate: '2018-10-11'
                         }, {
                             id: 'IH8',
-                            index: 2,
+                            index: 6,
                             unique: '1076',
                             equipment: '设备1',
                             plandate: '2018-10-11'
@@ -185,10 +243,8 @@ $(function () {
                     ]
                 }
             ],
-            flowline: [{
-                start: '1035',
-                end: '1071'
-            }]
+            flowline: flowline3
         }
     });
+
 }());
