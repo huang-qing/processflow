@@ -515,7 +515,7 @@
 
         node = setGroup(this.paper, this.elements.nodes.concat(this.elements.lines), this.config.className.process);
         node.attr({
-            'data-flowlinecount': 1,
+            //'data-flowlinecount': 1,
             'data-id': guid()
         });
         return node;
@@ -792,6 +792,8 @@
             node;
 
         for (var i = 0, len = rootNodes.length; i < len; i++) {
+            //test
+            //if(i===2){
             node = rootNodes[i];
             this.renderLine(node, {
                 id: node.parent().attr('data-id'),
@@ -799,6 +801,7 @@
                 back: false,
                 count: 1
             });
+            //}
         }
     };
 
@@ -813,7 +816,7 @@
         if (!node) {
             return;
         }
-   
+
         nodeState = node.attr('data-state');
         toProcessId = node.attr('data-to-process');
         fromProcessId = node.attr('data-from-process');
@@ -829,6 +832,7 @@
         }
 
         if (nodeState === 'out' && (isOut || isBack)) {
+            //不进行任何组件或拆件
             if (info.count > 1) {
                 nextNode = this.getNextNode(node);
                 this.renderStraightLine(node, nextNode);
@@ -836,7 +840,7 @@
             }
             else {
                 //合并后无法区分是拆件还是整体移件，全部按照拆件处理，实际的工艺由人工判断
-                this.count--;
+                info.count--;
 
                 nextNode = this.element.select('[data-id="' + node.attr('data-to') + '"]');
                 this.renderBrokenLine(node, nextNode);
