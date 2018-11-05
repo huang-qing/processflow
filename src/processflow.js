@@ -24,7 +24,8 @@
             process: $.extend(true, {}, Processflow.process)
         };
         this.$container = $(options.query);
-        this.data = options.data;
+        this.data = $.extend(true, { processflow: [], flowline: [] }, options.data);
+        this.autoResize = options.autoResize || true;
         this.$svg;
         this.svg;
         this.paper;
@@ -35,10 +36,12 @@
         };
         this.cache;
 
-        this.create();
-        this.resize();
-        this.createFlowline();
-        this.bindEvent();
+        if (this.$container.length > 0) {
+            this.create();
+            this.resize();
+            this.createFlowline();
+            this.bindEvent();
+        }
     }
 
     Processflow.component = {
@@ -238,33 +241,42 @@
     };
 
     Processflow.prototype.create = function () {
-        if (this.$container.length > 0) {
+        this.size = this.getSvgSize();
 
-            this.size = this.getSvgSize();
+        this.componentSvg = Snap(this.size.component.width, this.size.component.height);
+        this.processSvg = Snap(this.size.process.width, this.size.process.height);
 
-            this.componentSvg = Snap(this.size.component.width, this.size.component.height);
-            this.processSvg = Snap(this.size.process.width, this.size.process.height);
+        this.componentPaper = this.componentSvg.paper;
+        this.processPaper = this.processSvg.paper;
 
-            this.componentPaper = this.componentSvg.paper;
-            this.processPaper = this.processSvg.paper;
+        this.$componentSvg = $(this.componentSvg.node);
+        this.$processSvg = $(this.processSvg.node);
 
-            this.$componentSvg = $(this.componentSvg.node);
-            this.$processSvg = $(this.processSvg.node);
+        this.$componentContainer = $('<div class="processflow-component-container"></div>');
+        this.$processContainer = $('<div class="processflow-process-container"></div>');
 
-            this.$componentContainer = $('<div class="processflow-component-container"></div>');
-            this.$processContainer = $('<div class="processflow-process-container"></div>');
+        this.$componentContainer.append(this.$componentSvg);
+        this.$processContainer.append(this.$processSvg);
+        this.$container.append(this.$componentContainer);
+        this.$container.append(this.$processContainer);
+        this.$container.addClass('processflow');
 
-            this.$componentContainer.append(this.$componentSvg);
-            this.$processContainer.append(this.$processSvg);
-            this.$container.append(this.$componentContainer);
-            this.$container.append(this.$processContainer);
-            this.$container.addClass('processflow');
-
-            this.createFlowPanels();
-        }
+        this.createFlowPanels();
     };
 
-    Processflow.prototype.createFlowline = function (paper, data) {
+    Processflow.prototype.load = function (data) {
+        this.data = data;
+        this.clear();
+        this.createFlowPanels();
+        this.createFlowline();
+    };
+
+    Processflow.prototype.clear = function () {
+        this.processPaper.clear();
+        this.componentPaper.clear();
+    };
+
+    Processflow.prototype.createFlowline = function () {
         var flowline = new Flowline(this.processPaper, this.elements.process, this.data.flowline, this.config.process);
 
         flowline.render();
@@ -275,6 +287,7 @@
             c_height = this.config.component.height,
             c_width = this.config.component.width,
             height = c_height * count;
+
 
         return {
             component: {
@@ -332,12 +345,19 @@
 
     Processflow.prototype.bindEvent = function () {
         var process = this.$processContainer,
-            component = this.$componentContainer;
+            component = this.$componentContainer,
+            self = this;
 
         process.scroll(function () {
             var top = this.scrollTop;
             component.css('margin-top', -1 * top);
         });
+
+        if (this.autoResize) {
+            $(window).resize(function () {
+                self.resize();
+            });
+        }
     };
 
     function processflowPanel(componentPaper, processPaper, data, config, x, y, cache) {
@@ -803,6 +823,8 @@
             });
             //}
         }
+
+        this.resize();
     };
 
     Flowline.prototype.renderLine = function (node, info) {
@@ -942,6 +964,13 @@
         return element;
     };
 
+    Flowline.prototype.resize = function () {
+        var svg = this.paper,
+            panel = this.element;
+
+        svg.attr({ width: panel.getBBox().width + 10 });
+    };
+
     function Menu($) {
 
     }
@@ -950,6 +979,23 @@
 
     }
 
-    window.Processflow = Processflow;
+    function API(options) {
+        this.config = {
+            component: Processflow.component,
+            process: Processflow.process
+        };
+
+        this.processflow = new Processflow(options);
+    }
+
+    API.prototype.resize = function () {
+        this.processflow.resize();
+    };
+
+    API.prototype.load = function (data) {
+        this.processflow.load(data);
+    };
+
+    window.Processflow = API;
 
 }(jQuery, Snap, window));

@@ -1,7 +1,7 @@
 /* global $  Processflow */
 $(function () {
 
-    var processflow = [
+    var flows = [
         {
             component: {
                 id: '202',
@@ -244,9 +244,15 @@ $(function () {
     var processflow = new Processflow({
         query: '#processflow',
         data: {
-            processflow: processflow,
+            processflow: flows,
             flowline: flowline2
-        }
+        },
+        autoResize: true
+    });
+
+    processflow.load({
+        processflow: flows,
+        flowline: flowline3
     });
 
 }());
