@@ -980,13 +980,11 @@
     }
 
     function API(options) {
-        this.config = {
-            component: Processflow.component,
-            process: Processflow.process
-        };
-
         this.processflow = new Processflow(options);
     }
+
+    API.component = Processflow.component;
+    API.process = Processflow.process;
 
     API.prototype.resize = function () {
         this.processflow.resize();
