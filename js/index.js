@@ -191,7 +191,7 @@ $(function () {
         },
         {
             start: '1073',
-            end: '1058'
+            end: '1057'
         },
         {
             start: '1058',
@@ -241,18 +241,64 @@ $(function () {
         }
     ];
 
-    var processflow = new Processflow({
-        query: '#processflow',
+    var flowline4 = [
+        {
+            start: '1035',
+            end: '1058'
+        },
+        {
+            start: '1072',
+            end: '1058'
+        },
+        {
+            start: '1059',
+            end: '1073'
+        },
+        {
+            start: '1059',
+            end: '1038'
+        }
+    ];
+
+    // var processflow1 = new Processflow({
+    //     query: '#processflow1',
+    //     data: {
+    //         processflow: flows,
+    //         flowline: flowline1
+    //     },
+    //     autoResize: true
+    // });
+
+    // var processflow2 = new Processflow({
+    //     query: '#processflow2',
+    //     data: {
+    //         processflow: flows,
+    //         flowline: flowline2
+    //     },
+    //     autoResize: true
+    // });
+
+    // var processflow3 = new Processflow({
+    //     query: '#processflow3',
+    //     data: {
+    //         processflow: flows,
+    //         flowline: flowline3
+    //     },
+    //     autoResize: true
+    // });
+
+    var processflow4 = new Processflow({
+        query: '#processflow4',
         data: {
             processflow: flows,
-            flowline: flowline2
+            flowline: flowline4
         },
         autoResize: true
     });
 
-    processflow.load({
-        processflow: flows,
-        flowline: flowline3
-    });
+    // processflow.load({
+    //     processflow: flows,
+    //     flowline: flowline3
+    // });
 
 }());

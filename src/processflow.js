@@ -1,4 +1,16 @@
-/* global jQuery Snap  */
+/*!
+ * processflow v1.0.0 - jQuery plug 
+ *
+ * Includes jquery.js
+ * Includes raphael.js or snap.js
+ * 
+ * Copyright © 2018-2019 huangqing
+ * Released under the MIT license
+ *
+ * Date: 2018-11-06
+ */
+
+/* global jQuery Snap Raphael  */
 (function ($, Snap, window) {
 
     function setGroup(paper, list, className) {
@@ -243,6 +255,9 @@
     Processflow.prototype.create = function () {
         this.size = this.getSvgSize();
 
+        this.$componentContainer = $('<div class="processflow-component-container"></div>');
+        this.$processContainer = $('<div class="processflow-process-container"></div>');
+
         this.componentSvg = Snap(this.size.component.width, this.size.component.height);
         this.processSvg = Snap(this.size.process.width, this.size.process.height);
 
@@ -252,8 +267,6 @@
         this.$componentSvg = $(this.componentSvg.node);
         this.$processSvg = $(this.processSvg.node);
 
-        this.$componentContainer = $('<div class="processflow-component-container"></div>');
-        this.$processContainer = $('<div class="processflow-process-container"></div>');
 
         this.$componentContainer.append(this.$componentSvg);
         this.$processContainer.append(this.$processSvg);
@@ -736,7 +749,7 @@
             offsetX = config.node.width + config.line.width;
 
         this.setNodeState(fromNode, toNode);
-
+        //debugger;
         if (fromNodeBox.x === toNodeBox.x) {
             this.translateNodeX(toNode, offsetX);
         }
@@ -751,20 +764,45 @@
     Flowline.prototype.setNodeState = function (fromNode, toNode) {
         var fromProcessId = fromNode.parent().attr('data-id'),
             toProcessId = toNode.parent().attr('data-id'),
-            toId = toNode.attr('data-id');
+            fromId = fromNode.attr('data-id'),
+            toId = toNode.attr('data-id'),
+            dataFromProcess,
+            dataToProcess,
+            dataTo,
+            dataFrom;
 
+        //拆件
+        if (fromNode.attr('data-state')) {
+            dataToProcess = fromNode.attr('data-to-process') + ',' + toProcessId;
+            dataTo = fromNode.attr('data-to') + ',' + toId;
+        }
+        else {
+            dataToProcess = toProcessId;
+            dataTo = toId;
+        }
 
         fromNode.attr({
             'data-state': 'out',
             'data-from-process': fromProcessId,
-            'data-to-process': toProcessId,
-            'data-to': toId
+            'data-to-process': dataToProcess,
+            'data-to': dataTo
         });
+
+        //合件
+        if (toNode.attr('data-state')) {
+            dataFromProcess = toNode.attr('data-from-process') + ',' + fromProcessId;
+            dataFrom = toNode.attr('data-from') + ',' + fromId;
+        }
+        else {
+            dataFromProcess = fromProcessId;
+            dataFrom = fromId;
+        }
 
         toNode.attr({
             'data-state': 'in',
-            'data-from-process': fromProcessId,
-            'data-to-process': toProcessId
+            'data-from-process': dataFromProcess,
+            'data-to-process': toProcessId,
+            'data-from': dataFrom
         });
     };
 
@@ -813,15 +851,15 @@
 
         for (var i = 0, len = rootNodes.length; i < len; i++) {
             //test
-            //if(i===2){
+            //if (i === 0) {
             node = rootNodes[i];
             this.renderLine(node, {
                 id: node.parent().attr('data-id'),
-                out: false,
+                out: null,
                 back: false,
                 count: 1
             });
-            //}
+            // }
         }
 
         this.resize();
@@ -832,6 +870,7 @@
             nodeState,
             toProcessId,
             fromProcessId,
+            toNode,
             isOut = false,
             isBack = false;
 
@@ -842,38 +881,86 @@
         nodeState = node.attr('data-state');
         toProcessId = node.attr('data-to-process');
         fromProcessId = node.attr('data-from-process');
+        toNode = node.attr('data-to');
 
         //判断是否拆过件
         if (nodeState === 'out') {
-            isOut = fromProcessId === info.id && info.out === false;
-            isBack = toProcessId == info.id && info.out === true;
+            debugger;
+            // isOut = fromProcessId === info.id && info.out === false;
+            // isBack = toProcessId == info.id && info.out === true;
+            isOut = this.hasProcessId(fromProcessId, info.id) && info.out === null;
+            isBack = this.hasProcessId(toProcessId, info.id) && info.out !== null;
         }
         //计算合件的次数
-        else if (nodeState === 'in' && toProcessId === info.id) {
-            info.count++;
+        // else if (nodeState === 'in' &&  toProcessId === info.id) {
+        //     debugger;
+        //     info.count++;
+        // }
+
+        else if (nodeState === 'in') {
+            if (info.out && info.back && this.hasProcessId(toProcessId, info.id)) {
+
+                //合件拆回
+                info.out = null;
+                info.back = false;
+            }
+            else if (info.out && this.hasProcessId(fromProcessId, info.id)) {
+                debugger;
+                //合件,保持状态
+            }
+            else if (this.hasProcessId(toProcessId, info.id)) {
+                //其他件的合件到当前流程，增加流程数量
+                info.count++;
+            }
         }
 
-        if (nodeState === 'out' && (isOut || isBack)) {
-            //不进行任何组件或拆件
-            if (info.count > 1) {
-                nextNode = this.getNextNode(node);
-                this.renderStraightLine(node, nextNode);
-                this.renderLine(nextNode, info);
-            }
-            else {
-                //合并后无法区分是拆件还是整体移件，全部按照拆件处理，实际的工艺由人工判断
-                info.count--;
 
-                nextNode = this.element.select('[data-id="' + node.attr('data-to') + '"]');
-                this.renderBrokenLine(node, nextNode);
-                if (isOut) {
-                    info.out = true;
-                }
-                else {
-                    info.out = false;
-                }
-                this.renderLine(nextNode, info);
-            }
+        // if (nodeState === 'out' && (isOut || isBack)) {
+        //     //不进行任何组件或拆件
+        //     if (info.count > 1) {
+        //         nextNode = this.getNextNode(node);
+        //         this.renderStraightLine(node, nextNode);
+        //         this.renderLine(nextNode, info);
+        //     }
+        //     else {
+        //         //合并后无法区分是拆件还是整体移件，全部按照拆件处理，实际的工艺由人工判断
+        //         info.count--;
+
+        //         nextNode = this.element.select('[data-id="' + node.attr('data-to') + '"]');
+        //         this.renderBrokenLine(node, nextNode);
+        //         if (isOut) {
+        //             info.out = true;
+        //         }
+        //         else {
+        //             info.out = false;
+        //         }
+        //         this.renderLine(nextNode, info);
+        //     }
+        // }
+        if (nodeState === 'out' && info.count > 1) {
+            //不进行任何组件或拆件
+            nextNode = this.getNextNode(node);
+            this.renderStraightLine(node, nextNode);
+            this.renderLine(nextNode, info);
+        }
+        else if (nodeState === 'out' && isOut) {
+            info.out = toProcessId;
+            //info.count--;
+
+            //test
+            //nextNode = this.element.select('[data-id="' + node.attr('data-to') + '"]');
+            nextNode = this.queryNode(null, toProcessId, toNode);
+            this.renderBrokenLine(node, nextNode);
+            this.renderLine(nextNode, info);
+        }
+        else if (nodeState == 'out' && isBack) {
+            info.back = true;
+            //info.count++;
+            //test
+            //nextNode = this.element.select('[data-id="' + node.attr('data-to') + '"]');
+            nextNode = this.queryNode(info.id, toProcessId, toNode);
+            this.renderBrokenLine(node, nextNode);
+            this.renderLine(nextNode, info);
         }
         else {
             nextNode = this.getNextNode(node);
@@ -886,6 +973,41 @@
         // this.renderStraightLine(node, nextNode);
         // this.renderLine(nextNode, processId);
     };
+
+    Flowline.prototype.hasProcessId = function (list, id) {
+        var item;
+
+        list = list.split(',');
+        for (var i = 0, len = list.length; i < len; i++) {
+            item = list[i];
+            if (item === id) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    Flowline.prototype.queryNode = function (processId, processList, nodeList) {
+        var nodeId;
+
+        if (typeof processList === 'string') {
+            processList = processList.split(',');
+        }
+        if (typeof nodeList === 'string') {
+            nodeList = nodeList.split(',');
+        }
+
+        for (var i = 0, len = processList.length; i < len; i++) {
+            //指定流程id或任意流程id
+            if (processList[i] === processId || processId === null) {
+                nodeId = nodeList[i];
+                break;
+            }
+        }
+
+        return this.element.select('[data-id="' + nodeId + '"]');
+    }
 
     Flowline.prototype.getPositionInfo = function (node, nextNode) {
         var nodeBox,
@@ -996,4 +1118,4 @@
 
     window.Processflow = API;
 
-}(jQuery, Snap, window));
+}(jQuery, typeof Snap !== 'undefined' ? Snap : Raphael, window));
