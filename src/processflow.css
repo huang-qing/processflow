@@ -6,6 +6,7 @@
     /* overflow-y: auto;
     overflow-x: hidden; */
     overflow:hidden;
+    position: relative;
 }
 
 .processflow-component-container
@@ -19,4 +20,53 @@
     display: inline-block;
     vertical-align: top;
     overflow-x:auto;
+}
+
+.processflow-menu
+{
+    position: absolute;
+    top:2px;
+    left:40%;
+}
+
+.processflow-menu-item
+{
+    border:1px solid #e1e1e1;
+    padding:6px;
+    margin-right:3px;
+    display:inline-block;
+}
+
+.processflow-menu-item:hover
+{
+    background:#F4F4F4;
+}
+
+.processflow-menu-icon
+{
+    display: inline-block;
+    width:16px;
+    height:16px;
+    background-size: 100%;
+    cursor: pointer;
+}
+
+.processflow-zoomin-icon
+{
+    background-image: url(image/zoom-in.png);
+}
+
+.processflow-zoomout-icon
+{
+    background-image: url(image/zoom-out.png);
+}
+
+.processflow-line-add-icon
+{
+    background-image: url(image/line-add.png);
+}
+
+.processflow-line-remove-icon
+{
+    background-image: url(image/line-remove.png);
 }

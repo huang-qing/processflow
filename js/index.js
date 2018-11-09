@@ -272,7 +272,7 @@ $(function () {
         }
     ];
 
-    
+
     var flowline6 = [
         {
             start: '1073',
@@ -290,53 +290,67 @@ $(function () {
             processflow: flows,
             flowline: flowline1
         },
-        autoResize: true
+        autoResize: true,
+        events: {
+            component: {
+                contextmenu: function (data) {
+                    console.dir(data);
+                }
+            },
+            process: {
+                node: {
+                    contextmenu: function (data) {
+                        console.dir(data);
+                    }
+                }
+            }
+        }
     });
 
-    var processflow2 = new Processflow({
-        query: '#processflow2',
-        data: {
-            processflow: flows,
-            flowline: flowline2
-        },
-        autoResize: true
-    });
+    // var processflow2 = new Processflow({
+    //     query: '#processflow2',
+    //     data: {
+    //         processflow: flows,
+    //         flowline: flowline2
+    //     },
+    //     autoResize: true
+    // });
 
-    var processflow3 = new Processflow({
-        query: '#processflow3',
-        data: {
-            processflow: flows,
-            flowline: flowline3
-        },
-        autoResize: true
-    });
+    // var processflow3 = new Processflow({
+    //     query: '#processflow3',
+    //     data: {
+    //         processflow: flows,
+    //         flowline: flowline3
+    //     },
+    //     autoResize: true
+    // });
 
-    var processflow4 = new Processflow({
-        query: '#processflow4',
-        data: {
-            processflow: flows,
-            flowline: flowline4
-        },
-        autoResize: true
-    });
+    // var processflow4 = new Processflow({
+    //     query: '#processflow4',
+    //     data: {
+    //         processflow: flows,
+    //         flowline: flowline4
+    //     },
+    //     autoResize: true
+    // });
 
-    var processflow5 = new Processflow({
-        query: '#processflow5',
-        data: {
-            processflow: flows,
-            flowline: flowline5
-        },
-        autoResize: true
-    });
+    // var processflow5 = new Processflow({
+    //     query: '#processflow5',
+    //     data: {
+    //         processflow: flows,
+    //         flowline: flowline5
+    //     },
+    //     autoResize: true
+    // });
 
-    var processflow6 = new Processflow({
-        query: '#processflow6',
-        data: {
-            processflow: flows,
-            flowline: flowline6
-        },
-        autoResize: true
-    });
+    // var processflow6 = new Processflow({
+    //     query: '#processflow6',
+    //     data: {
+    //         processflow: flows,
+    //         flowline: flowline6
+    //     },
+    //     autoResize: true
+    // });
 
     // processflow.load({
     //     processflow: flows,

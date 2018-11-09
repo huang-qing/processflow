@@ -2,7 +2,7 @@
  * processflow v1.0.0 - jQuery plug 
  *
  * Includes jquery.js
- * Includes raphael.js or snap.js
+ * Includes snap.js
  * 
  * Copyright © 2018-2019 huangqing
  * Released under the MIT license
@@ -10,7 +10,7 @@
  * Date: 2018-11-06
  */
 
-/* global jQuery Snap Raphael  */
+/* global jQuery Snap   */
 (function ($, Snap, window) {
 
     function setGroup(paper, list, className) {
@@ -31,9 +31,40 @@
     }();
 
     function Processflow(options) {
+        options = $.extend(true, {
+            query: '',
+            data: {
+                processflow: [],
+                flowline: []
+            },
+            autoResize: true,
+            events: {
+                component: {
+                    contextmenu: function (data, config) {
+                        console.log('component contextmenu event');
+                    }
+                },
+                process: {
+                    node: {
+                        contextmenu: function (data, config) {
+                            console.log('process node contextmenu event');
+                        },
+                        click: function (data) {
+                            console.log('process node click event');
+                        }
+                    },
+                    line: {
+                        contextmenu: function (data, config) {
+                            console.log('process line contextmenu event');
+                        }
+                    }
+                }
+            }
+        }, options);
+
         this.config = {
-            component: $.extend(true, {}, Processflow.component),
-            process: $.extend(true, {}, Processflow.process)
+            component: $.extend(true, {}, Processflow.component, { events: options.events.component }),
+            process: $.extend(true, {}, Processflow.process, { events: options.events.process })
         };
         this.$container = $(options.query);
         this.data = $.extend(true, { processflow: [], flowline: [] }, options.data);
@@ -46,7 +77,19 @@
             process: null,
             line: null
         };
-        this.cache;
+        this.cache = {
+            select: {
+                component: null,
+                processLine: null,
+                processNode: null
+            },
+            operatingStatus: null,
+            line: {
+                start: null,
+                end: null
+            },
+            scale: 1
+        };
 
         if (this.$container.length > 0) {
             this.create();
@@ -122,10 +165,23 @@
                 strokeWidth: 1
             }
         },
+        rect: {
+            attr: {
+                //fill:"#ffffff",
+                //stroke: '#ffffff',
+                //strokeWidth: 0
+                opacity: 0
+            }
+        },
         className: {
             component: 'procesflow-component',
             panel: 'procesflow-component-panel'
         },
+        // events: {
+        //     contextmenu: function (data) {
+        //         //console.dir(data);
+        //     }
+        // },
         width: 200,
         height: 120,
         offsetX: 12,
@@ -248,18 +304,31 @@
             process: 'processflow-process',
             panel: 'processflow-process-panel'
         },
+        // events: {
+        //     node: {
+        //         contextmenu: function (data) {
+        //             //console.dir(data);
+        //         }
+        //     },
+        //     line: {
+        //         contextmenu: function (data) {
+        //             //console.dir(data);
+        //         }
+        //     }
+        // },
         id: 'unique'
 
     };
 
     Processflow.prototype.create = function () {
         this.size = this.getSvgSize();
+        this.cache.size = this.size;
 
         this.$componentContainer = $('<div class="processflow-component-container"></div>');
         this.$processContainer = $('<div class="processflow-process-container"></div>');
 
-        this.componentSvg = Snap(this.size.component.width, this.size.component.height);
-        this.processSvg = Snap(this.size.process.width, this.size.process.height);
+        this.componentSvg = Snap();
+        this.processSvg = Snap();
 
         this.componentPaper = this.componentSvg.paper;
         this.processPaper = this.processSvg.paper;
@@ -274,7 +343,11 @@
         this.$container.append(this.$processContainer);
         this.$container.addClass('processflow');
 
+        this.resizeComponent();
         this.createFlowPanels();
+
+        this.menu = new Menu(this);
+        this.menu.create();
     };
 
     Processflow.prototype.load = function (data) {
@@ -290,7 +363,7 @@
     };
 
     Processflow.prototype.createFlowline = function () {
-        var flowline = new Flowline(this.processPaper, this.elements.process, this.data.flowline, this.config.process);
+        var flowline = new Flowline(this.processPaper, this.elements.process, this.data.flowline, this.config.process, this.cache);
 
         flowline.render();
     };
@@ -320,20 +393,35 @@
             process = this.$processContainer,
             size = this.size,
             containerWidth = container.width(),
-            containerHeight = container.parent().height();
+            containerHeight = container.parent().height(),
+            componentWidth = size.component.width * this.cache.scale;
+
 
         container.css({
             height: containerHeight
         });
 
         component.css({
-            width: size.component.width,
+            width: componentWidth,
             height: containerHeight
         });
 
         process.css({
-            width: containerWidth - size.component.width - (containerHeight < size.component.height ? 22 : 1),
+            width: containerWidth - componentWidth - (containerHeight < size.component.height ? 22 : 1),
             height: containerHeight
+        });
+    };
+
+    Processflow.prototype.resizeComponent = function () {
+        var svg = this.componentPaper,
+            size = this.cache.size,
+            height = size.component.height,
+            width = size.component.width;
+
+        svg.attr({
+            width: width,
+            height: height,
+            viewBox: [0, 0, width, height].join(' ')
         });
     };
 
@@ -366,11 +454,69 @@
             component.css('margin-top', -1 * top);
         });
 
+        component.contextmenu(function () {
+            return false;
+        });
+        process.contextmenu(function () {
+            return false;
+        });
+
         if (this.autoResize) {
             $(window).resize(function () {
                 self.resize();
             });
         }
+    };
+
+    Processflow.prototype.zoomIn = function () {
+        var scale = this.cache.scale;
+
+        if (scale >= 4) {
+            scale = 4;
+        }
+        else if (scale >= 1) {
+            scale += 0.5;
+        }
+        else if (scale < 1) {
+            scale = Math.ceil((scale + 0.1) * 10) / 10;
+        }
+
+        this.zoom(scale);
+    };
+
+    Processflow.prototype.zoomOut = function () {
+        var scale = this.cache.scale;
+
+        if (scale <= 0.2) {
+            scale = 0.1;
+        }
+        else if (scale > 1) {
+            scale -= 0.5;
+        }
+        else if (scale <= 1) {
+            scale = Math.floor((scale - 0.1) * 10) / 10;
+        }
+
+        this.zoom(scale);
+    };
+
+    Processflow.prototype.zoom = function (scale) {
+        var componentViewbox = this.componentPaper.attr('viewBox'),
+            processViewbox = this.processPaper.attr('viewBox');
+
+        this.cache.scale = scale;
+        //console.log(scale);
+        this.componentPaper.attr({
+            width: componentViewbox.width * scale,
+            height: componentViewbox.height * scale
+        });
+
+        this.processPaper.attr({
+            width: processViewbox.width * scale,
+            height: processViewbox.height * scale
+        });
+
+        this.resize();
     };
 
     function processflowPanel(componentPaper, processPaper, data, config, x, y, cache) {
@@ -408,12 +554,14 @@
         this.element;
         this.elements = {
             texts: [],
-            line: null
+            line: null,
+            rect: null
         };
         this.endY;
         this.cache = cache;
 
         this.element = this.create();
+        this.bindEvent();
     }
 
     Component.prototype.create = function () {
@@ -424,10 +572,11 @@
             y = this.y + padding,
             node;
 
+        this.renderRect();
         this.renderVText(x, y, info);
         this.renderLine();
 
-        node = setGroup(this.paper, this.elements.texts.concat([this.elements.line]), this.config.className.component);
+        node = setGroup(this.paper, this.elements.texts.concat([this.elements.line, this.elements.rect]), this.config.className.component);
 
         return node;
     };
@@ -478,6 +627,17 @@
         }
     };
 
+    Component.prototype.renderRect = function () {
+        var config = this.config,
+            element,
+            startX = config.x,
+            startY = this.y;
+
+        element = this.paper.rect(startX, startY, config.width, config.height);
+        element.attr(config.rect.attr);
+        this.elements.rect = element;
+    };
+
     Component.prototype.renderLine = function () {
         var config = this.config,
             element,
@@ -515,6 +675,17 @@
         return element;
     };
 
+    Component.prototype.bindEvent = function () {
+        var element = this.element,
+            self = this;
+
+        element.mouseup(function (e) {
+            if (e.button === 2) {
+                self.config.events.contextmenu(self.data, self.config);
+            }
+        });
+    };
+
     function FlowChart(paper, data, config, x, y, cache) {
         this.paper = paper;
         this.data = data;
@@ -548,7 +719,6 @@
 
         node = setGroup(this.paper, this.elements.nodes.concat(this.elements.lines), this.config.className.process);
         node.attr({
-            //'data-flowlinecount': 1,
             'data-id': guid()
         });
         return node;
@@ -607,9 +777,18 @@
     };
 
     FlowChart.prototype.bindMainNodeEvent = function (element, info) {
-        element.click(function () {
-            console.dir(info);
+
+        var self = this;
+
+        element.mouseup(function (e) {
+            if (e.button === 2) {
+                self.config.events.node.contextmenu(info, self.config);
+            }
+            else if (e.button === 0) {
+                self.config.events.node.click(info, self.config);
+            }
         });
+
     };
 
     FlowChart.prototype.renderSecondaryNode = function (x, y, type, info) {
@@ -686,11 +865,12 @@
         return element;
     };
 
-    function Flowline(paper, element, data, config) {
+    function Flowline(paper, element, data, config, cache) {
         this.paper = paper;
         this.data = data;
         this.element = element;
         this.config = config;
+        this.cache = cache;
     }
 
     Flowline.prototype.render = function () {
@@ -752,7 +932,7 @@
             nextNode;
 
         this.setNodeState(fromNode, toNode);
-       
+
         //当前节点与跳转节点x位置相同
         if (fromNodeBox.x === toNodeBox.x) {
             this.translateNodeX(toNode, offsetX);
@@ -761,13 +941,11 @@
         else if (fromNodeBox.x + offsetX < toNodeBox.x) {
             offsetX = toNodeBox.x - fromNodeBox.x - offsetX;
             this.translateNodeX(this.getNextNode(fromNode), offsetX);
-            //this.translateNodeX(this.getNextNode(fromNode), toNodeBox.x - fromNodeBox.x - offsetX);
         }
         //当前节点在跳转节点x位置之后
         else if (fromNodeBox.x > toNodeBox.x) {
             offsetX = fromNodeBox.x + offsetX - toNodeBox.x;
             this.translateNodeX(toNode, offsetX);
-            //this.translateNodeX(toNode, fromNodeBox.x + offsetX - toNodeBox.x);
         }
 
         //调整与跳转节点关联节点的后续流程节点的位置
@@ -873,8 +1051,6 @@
             node;
 
         for (var i = 0, len = rootNodes.length; i < len; i++) {
-            //test
-            //if (i === 0) {
             node = rootNodes[i];
             this.renderLine(node, {
                 id: node.parent().attr('data-id'),
@@ -882,7 +1058,6 @@
                 back: false,
                 count: 1
             });
-            // }
         }
 
         this.resize();
@@ -921,8 +1096,8 @@
                 info.back = false;
             }
             //到其他流程中合件,保持状态
-            else if (info.out && this.hasProcessId(fromProcessId, info.id)) {
-            }
+            // else if (info.out && this.hasProcessId(fromProcessId, info.id)) {
+            // }
             //其他件在当前流程中进行合件，增加流程数量
             else if (this.hasProcessId(toProcessId, info.id)) {
                 info.count++;
@@ -971,7 +1146,7 @@
         }
 
         return false;
-    }
+    };
 
     Flowline.prototype.queryNode = function (processId, processList, nodeList) {
         var nodeId;
@@ -992,7 +1167,7 @@
         }
 
         return this.element.select('[data-id="' + nodeId + '"]');
-    }
+    };
 
     Flowline.prototype.getPositionInfo = function (node, nextNode) {
         var nodeBox,
@@ -1072,19 +1247,82 @@
     };
 
     Flowline.prototype.resize = function () {
-        var svg = this.paper,
-            panel = this.element;
+        var paper = this.paper,
+            panel = this.element,
+            size = this.cache.size,
+            height = size.process.height,
+            width = panel.getBBox().width + 10;
 
-        svg.attr({ width: panel.getBBox().width + 10 });
+        paper.attr({
+            width: width,
+            height: height,
+            viewBox: [0, 0, width, height].join(' ')
+        });
     };
 
-    function Menu($) {
+    function Menu(processflow) {
+        this.processflow = processflow;
+        this.items = {
+            zoomin: {
+                icon: 'processflow-zoomin-icon',
+                fn: function () {
+                    this.processflow.zoomIn();
+                }
+            },
+            zoomout: {
+                icon: 'processflow-zoomout-icon',
 
+                fn: function () {
+                    this.processflow.zoomOut();
+                }
+            },
+            connection: {
+                icon: 'processflow-line-add-icon',
+                fn: function () {
+
+                }
+            },
+            remove: {
+                icon: 'processflow-line-remove-icon',
+                fn: function () {
+
+                }
+            },
+        };
+
+        this.className = {
+            menu: 'processflow-menu',
+            item: 'processflow-menu-item',
+            icon: 'processflow-menu-icon',
+            text: 'processflow-menu-text'
+        };
     }
 
-    function ContextMenu($) {
+    Menu.prototype.create = function () {
+        var items = this.items,
+            item,
+            $menu,
+            $item,
+            self = this;
 
-    }
+        $menu = $(['<div class="', this.className.menu, '"', '></div>'].join(''));
+        for (var i in items) {
+            item = items[i];
+            $item = $([
+                '<a class="', this.className.item, '"', '>',
+                '<span class="', this.className.icon, ' ', item.icon, '"></span>',
+                '</a>'
+            ].join(''));
+
+            $menu.append($item);
+
+            $item.on('click', { item: item }, function (e) {
+                e.data.item.fn.call(self);
+            });
+
+            this.processflow.$container.append($menu);
+        }
+    };
 
     function API(options) {
         this.processflow = new Processflow(options);
@@ -1099,6 +1337,14 @@
 
     API.prototype.load = function (data) {
         this.processflow.load(data);
+    };
+
+    API.prototype.zoomIn = function () {
+        this.processflow.zoomIn();
+    };
+
+    API.prototype.zoomOut = function () {
+        this.processflow.zoomOut();
     };
 
     window.Processflow = API;
