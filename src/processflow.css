@@ -35,6 +35,7 @@
     padding:6px;
     margin-right:3px;
     display:inline-block;
+    cursor: pointer;
 }
 
 .processflow-menu-item:hover
@@ -69,4 +70,24 @@
 .processflow-line-remove-icon
 {
     background-image: url(image/line-remove.png);
+}
+
+.processflow-default-status-icon
+{
+    background-image: url(image/default-status.jpg);
+}
+
+.processflow-process-broken-line
+{
+    cursor: pointer;
+}
+
+.processflow-process-operating-status-connection .processflow-process-broken-line
+{
+    cursor: default;
+}
+
+.processflow-menu
+{
+    display: none;
 }

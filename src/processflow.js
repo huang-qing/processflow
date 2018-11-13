@@ -11,7 +11,7 @@
  */
 
 /* global jQuery Snap   */
-(function ($, Snap, window) {
+(function ($, Snap, window, console) {
 
     function setGroup(paper, list, className) {
         var node = paper.g.apply(paper, list);
@@ -31,7 +31,7 @@
     }();
 
     function Processflow(options) {
-        options = $.extend(true, {
+        this.options = $.extend(true, {
             query: '',
             data: {
                 processflow: [],
@@ -40,22 +40,22 @@
             autoResize: true,
             events: {
                 component: {
-                    contextmenu: function (data, config) {
-                        console.log('component contextmenu event');
+                    contextmenu: function (e, data, config) {
+                        //console.log('component contextmenu event');
                     }
                 },
                 process: {
                     node: {
-                        contextmenu: function (data, config) {
-                            console.log('process node contextmenu event');
+                        contextmenu: function (e, data, config) {
+                            //console.log('process node contextmenu event');
                         },
-                        click: function (data) {
+                        click: function (e, data, config) {
                             console.log('process node click event');
                         }
                     },
                     line: {
-                        contextmenu: function (data, config) {
-                            console.log('process line contextmenu event');
+                        contextmenu: function (e, data, config) {
+                            //console.log('process line contextmenu event');
                         }
                     }
                 }
@@ -63,12 +63,12 @@
         }, options);
 
         this.config = {
-            component: $.extend(true, {}, Processflow.component, { events: options.events.component }),
-            process: $.extend(true, {}, Processflow.process, { events: options.events.process })
+            component: $.extend(true, {}, Processflow.component, { events: this.options.events.component }),
+            process: $.extend(true, {}, Processflow.process, { events: this.options.events.process })
         };
-        this.$container = $(options.query);
-        this.data = $.extend(true, { processflow: [], flowline: [] }, options.data);
-        this.autoResize = options.autoResize || true;
+        this.$container = $(this.options.query);
+        this.data = $.extend(true, { processflow: [], flowline: [] }, this.options.data);
+        this.autoResize = this.options.autoResize || true;
         this.$svg;
         this.svg;
         this.paper;
@@ -86,17 +86,20 @@
             operatingStatus: null,
             line: {
                 start: null,
-                end: null
+                end: null,
+                startProcessId: null,
+                endProcessId: null,
+                error: null
             },
-            scale: 1
+            flow: {},
+            scale: 1,
+            instance: {
+                processflow: this,
+                flowline: null
+            }
         };
 
-        if (this.$container.length > 0) {
-            this.create();
-            this.resize();
-            this.createFlowline();
-            this.bindEvent();
-        }
+        this.render();
     }
 
     Processflow.component = {
@@ -167,9 +170,6 @@
         },
         rect: {
             attr: {
-                //fill:"#ffffff",
-                //stroke: '#ffffff',
-                //strokeWidth: 0
                 opacity: 0
             }
         },
@@ -177,11 +177,6 @@
             component: 'procesflow-component',
             panel: 'procesflow-component-panel'
         },
-        // events: {
-        //     contextmenu: function (data) {
-        //         //console.dir(data);
-        //     }
-        // },
         width: 200,
         height: 120,
         offsetX: 12,
@@ -261,7 +256,22 @@
                 stroke: '#4695F9',
                 strokeWidth: 1,
                 fill: '#ffffff',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                'stroke-dasharray': 0
+            },
+            selectAttr: {
+                stroke: '#007ACC',
+                strokeWidth: 3
+            },
+            selectAttr2: {
+                stroke: '#007ACC',
+                strokeWidth: 3,
+                'stroke-dasharray': [4, 2]
+            },
+            errorAttr: {
+                stroke: '#EC4D3C',
+                strokeWidth: 3,
+                'stroke-dasharray': [4, 2]
             },
             state: {
                 new: {
@@ -293,6 +303,11 @@
                 stroke: '#4695F9',
                 strokeWidth: 1,
                 fill: 'none'
+            },
+            selectAttr: {
+                stroke: '#007ACC',
+                strokeWidth: 3,
+                fill: 'none'
             }
         },
         className: {
@@ -302,22 +317,32 @@
             node: 'processflow-process-node',
             line: 'processflow-process-line',
             process: 'processflow-process',
-            panel: 'processflow-process-panel'
+            panel: 'processflow-process-panel',
+            brokenLine: 'processflow-process-broken-line',
+            defaultStatus: 'processflow-process-operating-status-default',
+            connectionStatus: 'processflow-process-operating-status-connection',
         },
-        // events: {
-        //     node: {
-        //         contextmenu: function (data) {
-        //             //console.dir(data);
-        //         }
-        //     },
-        //     line: {
-        //         contextmenu: function (data) {
-        //             //console.dir(data);
-        //         }
-        //     }
-        // },
+        attr: {
+            stroke: '#4695F9',
+            strokeWidth: 1,
+            'stroke-dasharray': 0
+        },
+        selectAttr: {
+            stroke: '#007ACC',
+            strokeWidth: 3
+        },
         id: 'unique'
 
+    };
+
+    Processflow.prototype.render = function () {
+        if (this.$container.length > 0) {
+            this.create();
+            this.resize();
+            this.renderFlowline();
+            this.renderMenu();
+            this.bindEvent();
+        }
     };
 
     Processflow.prototype.create = function () {
@@ -344,17 +369,14 @@
         this.$container.addClass('processflow');
 
         this.resizeComponent();
-        this.createFlowPanels();
-
-        this.menu = new Menu(this);
-        this.menu.create();
+        this.renderFlows();
     };
 
     Processflow.prototype.load = function (data) {
         this.data = data;
         this.clear();
-        this.createFlowPanels();
-        this.createFlowline();
+        this.renderFlows();
+        this.renderFlowline();
     };
 
     Processflow.prototype.clear = function () {
@@ -362,10 +384,50 @@
         this.componentPaper.clear();
     };
 
-    Processflow.prototype.createFlowline = function () {
-        var flowline = new Flowline(this.processPaper, this.elements.process, this.data.flowline, this.config.process, this.cache);
+    Processflow.prototype.getData = function () {
+        return this.data;
+    };
 
+    Processflow.prototype.setOperatingStatus = function (status) {
+        var className = this.config.process.className;
+
+        //默认状态：default
+        //连线状态：connection
+        this.cache.operatingStatus = status || 'default';
+
+        this.$processContainer
+            .removeClass([className.defaultStatus, className.connectionStatus].join(' '))
+            .addClass(status === 'connection' ? className.connectionStatus : className.defaultStatus);
+    };
+
+    Processflow.prototype.renderFlows = function () {
+        var data = this.data.processflow,
+            height = this.config.component.height,
+            x = this.config.component.x,
+            y = this.config.component.y,
+            componentNodes = [],
+            processNodes = [],
+            panel;
+
+        for (var i = 0, len = data.length; i < len; i++) {
+            panel = new Panel(this.componentPaper, this.processPaper, data[i], this.config, x, y + i * height, this.cache);
+            componentNodes.push(panel.component.element);
+            processNodes.push(panel.flowChart.element);
+        }
+
+        this.elements.component = setGroup(this.componentPaper, componentNodes, this.config.component.className.panel);
+        this.elements.process = setGroup(this.processPaper, processNodes, this.config.process.className.panel);
+    };
+
+    Processflow.prototype.renderFlowline = function () {
+        var flowline = new Flowline(this.processPaper, this.elements.process, this.data.flowline, this.config.process, this.cache);
         flowline.render();
+        this.cache.instance.flowline = flowline;
+    };
+
+    Processflow.prototype.renderMenu = function () {
+        this.menu = new Menu(this.cache);
+        this.menu.create();
     };
 
     Processflow.prototype.getSvgSize = function () {
@@ -423,25 +485,6 @@
             height: height,
             viewBox: [0, 0, width, height].join(' ')
         });
-    };
-
-    Processflow.prototype.createFlowPanels = function () {
-        var data = this.data.processflow,
-            height = this.config.component.height,
-            x = this.config.component.x,
-            y = this.config.component.y,
-            componentNodes = [],
-            processNodes = [],
-            panel;
-
-        for (var i = 0, len = data.length; i < len; i++) {
-            panel = new processflowPanel(this.componentPaper, this.processPaper, data[i], this.config, x, y + i * height, this.cache);
-            componentNodes.push(panel.component.element);
-            processNodes.push(panel.flowChart.element);
-        }
-
-        this.elements.component = setGroup(this.componentPaper, componentNodes, this.config.component.className.panel);
-        this.elements.process = setGroup(this.processPaper, processNodes, this.config.process.className.panel);
     };
 
     Processflow.prototype.bindEvent = function () {
@@ -519,7 +562,11 @@
         this.resize();
     };
 
-    function processflowPanel(componentPaper, processPaper, data, config, x, y, cache) {
+    Processflow.prototype.removeFlowLine = function () {
+        this.cache.instance.flowline.removeFlowLine();
+    };
+
+    function Panel(componentPaper, processPaper, data, config, x, y, cache) {
         this.componentPaper = componentPaper;
         this.processPaper = processPaper;
         this.data = data;
@@ -532,7 +579,7 @@
         this.element = this.create();
     }
 
-    processflowPanel.prototype.create = function () {
+    Panel.prototype.create = function () {
         var c_config = this.config.component,
             p_config = this.config.process;
 
@@ -681,7 +728,7 @@
 
         element.mouseup(function (e) {
             if (e.button === 2) {
-                self.config.events.contextmenu(self.data, self.config);
+                self.config.events.contextmenu(e, self.data, self.config);
             }
         });
     };
@@ -697,7 +744,7 @@
             lines: []
         };
         this.element;
-        this.cache;
+        this.cache = cache;
 
         this.element = this.create();
     }
@@ -777,17 +824,45 @@
     };
 
     FlowChart.prototype.bindMainNodeEvent = function (element, info) {
-
         var self = this;
 
         element.mouseup(function (e) {
             if (e.button === 2) {
-                self.config.events.node.contextmenu(info, self.config);
+                self.config.events.node.contextmenu(e, info, self.config);
             }
             else if (e.button === 0) {
-                self.config.events.node.click(info, self.config);
+                self.selectNode(this);
+                if (self.cache.operatingStatus !== 'connection') {
+                    self.config.events.node.click(e, info, self.config);
+                }
             }
         });
+
+    };
+
+    FlowChart.prototype.selectNode = function (element) {
+        var selected = this.cache.select.processLine || this.cache.select.processNode,
+            node = element.select('rect'),
+            flowline = this.cache.instance.flowline,
+            attr;
+
+        if (this.cache.select.processLine) {
+            selected.attr(this.config.attr);
+        } else if (this.cache.select.processNode) {
+            selected.select('rect').attr(this.config.attr);
+        }
+
+        if (this.cache.operatingStatus === 'connection') {
+            this.cache.select.processLine = null;
+            this.cache.select.processNode = null;
+            flowline.addFlowLine(element.parent());
+        }
+        else {
+            attr = this.config.node.selectAttr;
+            node.attr(attr);
+            this.cache.select.processLine = null;
+            this.cache.select.processNode = element;
+        }
 
     };
 
@@ -928,7 +1003,6 @@
             toNodeBox = toNode.getBBox(),
             offsetX = config.node.width + config.line.width,
             fromNodesId,
-            fromNodes,
             nextNode;
 
         this.setNodeState(fromNode, toNode);
@@ -1048,19 +1122,67 @@
 
     Flowline.prototype.renderAllLine = function () {
         var rootNodes = this.element.selectAll('[data-index="1"]'),
-            node;
+            node,
+            id,
+            info;
 
         for (var i = 0, len = rootNodes.length; i < len; i++) {
             node = rootNodes[i];
-            this.renderLine(node, {
-                id: node.parent().attr('data-id'),
+            id = node.parent().attr('data-id');
+            info = this.cache.flow[id] = {
+                id: id,
                 out: null,
                 back: false,
-                count: 1
-            });
+                count: 1,
+                brokenLine: []
+            };
+            this.renderLine(node, info);
         }
 
         this.resize();
+    };
+
+    Flowline.prototype.updateAllLine = function () {
+        this.clear();
+        this.sortData();
+        this.adjustProcessNode();
+        this.renderAllLine();
+    };
+
+    Flowline.prototype.clear = function () {
+        var lines = this.paper.selectAll('.' + this.config.className.line),
+            nodes = this.paper.selectAll('.' + this.config.className.node);
+
+        nodes.attr({
+            transform: '',
+            'data-dx': '',
+            'data-to': '',
+            'data-from': '',
+            'data-to-process': '',
+            'data-from-process': '',
+            'data-state': ''
+        });
+
+        lines.remove();
+
+        this.cache.flow = {};
+        this.cache.select = {
+            processLine: null,
+            processNode: null
+        };
+        this.cache.line = {
+            start: null,
+            end: null,
+            startProcessId: null,
+            endProcessId: null
+        };
+    };
+
+    Flowline.prototype.removeLine = function () {
+        this.clear();
+        this.sortData();
+        this.adjustProcessNode();
+        this.renderAllLine();
     };
 
     Flowline.prototype.renderLine = function (node, info) {
@@ -1070,7 +1192,9 @@
             fromProcessId,
             toNode,
             isOut = false,
-            isBack = false;
+            isBack = false,
+            fromId,
+            toId;
 
         if (!node) {
             return;
@@ -1080,6 +1204,7 @@
         toProcessId = node.attr('data-to-process');
         fromProcessId = node.attr('data-from-process');
         toNode = node.attr('data-to');
+        fromId = node.attr('data-id');
 
         //判断拆件
         if (nodeState === 'out') {
@@ -1116,19 +1241,33 @@
         else if (nodeState === 'out' && isOut) {
             info.out = toProcessId;
             nextNode = this.queryNode(null, toProcessId, toNode);
-            this.renderBrokenLine(node, nextNode);
+            this.renderBrokenLine(node, nextNode, info.id);
+
+            toId = nextNode.attr('data-id');
+            info.brokenLine.push({
+                'start': fromId,
+                'end': toId,
+            });
+
             this.renderLine(nextNode, info);
         }
         //从其他流程的合件中拆回，返回到当前流程
         else if (nodeState == 'out' && isBack) {
             info.back = true;
             nextNode = this.queryNode(info.id, toProcessId, toNode);
-            this.renderBrokenLine(node, nextNode);
+            this.renderBrokenLine(node, nextNode, info.id);
+
+            toId = nextNode.attr('data-id');
+            info.brokenLine.push({
+                'start': fromId,
+                'end': toId
+            });
+
             this.renderLine(nextNode, info);
         }
         else {
             nextNode = this.getNextNode(node);
-            this.renderStraightLine(node, nextNode);
+            this.renderStraightLine(node, nextNode, info.id);
             this.renderLine(nextNode, info);
         }
 
@@ -1201,7 +1340,7 @@
         };
     };
 
-    Flowline.prototype.renderStraightLine = function (node, nextNode) {
+    Flowline.prototype.renderStraightLine = function (node, nextNode, processId) {
         var position,
             element;
 
@@ -1213,12 +1352,17 @@
 
         element = this.paper.line(position.x1, position.y1, position.x2, position.y2);
         element.attr(this.config.line.attr);
+        element.attr('class', this.config.className.line);
+        element.attr({
+            'data-from': node.attr('data-id'),
+            'data-to': nextNode.attr('data-id'),
+            'data-process-id': processId
+        });
 
         return element;
-
     };
 
-    Flowline.prototype.renderBrokenLine = function (node, nextNode) {
+    Flowline.prototype.renderBrokenLine = function (node, nextNode, processId) {
         var position,
             x1,
             y1,
@@ -1242,8 +1386,213 @@
 
         element = this.paper.path(path);
         element.attr(this.config.line.attr);
+        element.attr({
+            'data-from': node.attr('data-id'),
+            'data-to': nextNode.attr('data-id'),
+            'data-process-id': processId
+        });
+        element.attr('class', [this.config.className.line, this.config.className.brokenLine].join(' '));
+
+        this.bindBrokenLineEvent(element);
 
         return element;
+    };
+
+    Flowline.prototype.selectLine = function (element) {
+        var selected = this.cache.select.processLine || this.cache.select.processNode,
+            line = element;
+
+        if (this.cache.select.processLine) {
+            selected.attr(this.config.attr);
+        } else if (this.cache.select.processNode) {
+            selected.select('rect').attr(this.config.attr);
+        }
+
+        line.attr(this.config.node.selectAttr);
+        this.cache.select.processLine = line;
+        this.cache.select.processNode = null;
+    };
+
+    Flowline.prototype.removeFlowLine = function () {
+        var cache = this.cache,
+            selectLine = cache.select.processLine,
+            processId,
+            startId,
+            endId,
+            list,
+            sign = false,
+            item;
+
+        if (!selectLine) {
+            return;
+        }
+
+        processId = selectLine.attr('data-process-id');
+        startId = selectLine.attr('data-from');
+        endId = selectLine.attr('data-to');
+
+        list = cache.flow[processId].brokenLine;
+
+        for (var i = 0, len = list.length; i < len; i++) {
+            item = list[i];
+            if ((item.start == startId && item.end == endId) || sign) {
+                sign = true;
+                this.removeFlowLineInData(item.start, item.end);
+            }
+        }
+
+        this.updateAllLine();
+    };
+
+    Flowline.prototype.removeFlowLineInData = function (start, end) {
+        var data = this.data,
+            item;
+
+        for (var len = data.length, i = len - 1; i >= 0; i--) {
+            item = data[i];
+            if (item.start == start && item.end == end) {
+                data.splice(i, 1);
+                break;
+            }
+        }
+    };
+
+    Flowline.prototype.addFlowLine = function (node) {
+        var line = this.cache.line,
+            id = node.attr('data-id'),
+            processId = node.parent().attr('data-id'),
+            flow = this.cache.flow[processId],
+            state = node.attr('data-state'),
+            attr = this.config.node.attr,
+            selectedAttr = this.config.node.selectAttr2,
+            errorAttr = this.config.node.errorAttr,
+            toNode,
+            index,
+            length;
+
+        if (line.error) {
+            this.paper.select('[data-id="' + line.error + '"] rect').attr(attr);
+            line.error = null;
+        }
+
+        //合件工艺节点不允许拆件
+        if (state === 'in' && line.start === null) {
+            line.error = id;
+            node.select('rect').attr(errorAttr);
+        }
+        //判断流程中拆回件允许返回的节点，必须是最后一个合件节点之后的相邻节点
+        else if (line.start !== null && flow.brokenLine.length > 0) {
+            length = flow.brokenLine.length;
+            index = length % 2 === 0 ? length - 2 : length - 1;
+            toNode = this.getNextNode(this.paper.select('[data-id="' + flow.brokenLine[index].start + '"]'));
+
+            if (toNode.attr('data-id') == id) {
+                line.end = id;
+                line.endProcessId = processId;
+                node.select('rect').attr(selectedAttr);
+            }
+            else {
+                line.error = id;
+                node.select('rect').attr(errorAttr);
+            }
+
+        }
+        else if (line.start === null) {
+            line.start = id;
+            line.startProcessId = processId;
+            node.select('rect').attr(selectedAttr);
+        }
+        else if (line.startProcessId === processId) {
+            this.paper.select('[data-id="' + line.start + '"] rect').attr(attr);
+            line.start = id;
+            line.startProcessId = processId;
+            node.select('rect').attr(selectedAttr);
+        }
+        else {
+            line.end = id;
+            line.endProcessId = processId;
+            node.select('rect').attr(selectedAttr);
+        }
+
+        if (line.start && line.end) {
+            this.addFlowLineInData();
+            this.paper.select('[data-id="' + line.start + '"] rect').attr(this.config.attr);
+            this.paper.select('[data-id="' + line.end + '"] rect').attr(this.config.attr);
+        }
+    };
+
+    Flowline.prototype.addFlowLineInData = function () {
+        var line = this.cache.line,
+            fromProcessId,
+            toProcessId,
+            fromNode,
+            fromId,
+            toId,
+            toNode,
+            node;
+
+        fromNode = this.paper.select('[data-id="' + line.start + '"]');
+        toNode = this.paper.select('[data-id="' + line.end + '"]');
+        fromId = fromNode.attr('data-id');
+        toId = toNode.attr('data-id');
+        fromProcessId = fromNode.parent().attr('data-id');
+        toProcessId = toNode.parent().attr('data-id');
+
+        //清除在这两个流程选中工序节点的后续关联拆合件流程关联
+        node = this.getNextNode(fromNode);
+        while (node) {
+            this.removeFlowlineByProcessIdInData(node, fromProcessId, toProcessId);
+            node = this.getNextNode(node);
+        }
+
+        node = this.getNextNode(toNode);
+        while (node) {
+            this.removeFlowlineByProcessIdInData(node, fromProcessId, toProcessId);
+            node = this.getNextNode(node);
+        }
+
+        this.data.push({
+            start: fromId,
+            end: toId
+        });
+
+        this.updateAllLine();
+    };
+
+    Flowline.prototype.removeFlowlineByProcessIdInData = function (node, fromProcessId, toProcessId) {
+        var _fromProcessId = node.attr('data-from-process'),
+            _toProcessId = node.attr('data-to-process'),
+            data = this.data,
+            item,
+            id;
+
+        if (!_fromProcessId) {
+            return;
+        }
+
+        if (this.hasProcessId(_fromProcessId, fromProcessId) ||
+            this.hasProcessId(_fromProcessId, toProcessId) ||
+            this.hasProcessId(_toProcessId, fromProcessId) ||
+            this.hasProcessId(_toProcessId, toProcessId)) {
+            id = node.attr('data-id');
+            for (var len = data.length, i = len - 1; i >= 0; i--) {
+                item = data[i];
+                if (item.start == id || item.end == id) {
+                    data.splice(i, 1);
+                }
+            }
+        }
+    };
+
+    Flowline.prototype.bindBrokenLineEvent = function (element) {
+        var self = this;
+
+        element.click(function (e) {
+            if (self.cache.operatingStatus === 'connection') {
+                return;
+            }
+            self.selectLine(this);
+        });
     };
 
     Flowline.prototype.resize = function () {
@@ -1260,8 +1609,10 @@
         });
     };
 
-    function Menu(processflow) {
-        this.processflow = processflow;
+    function Menu(cache) {
+        this.processflow = cache.instance.processflow;
+        this.flowline = cache.instance.flowline;
+
         this.items = {
             zoomin: {
                 icon: 'processflow-zoomin-icon',
@@ -1276,16 +1627,22 @@
                     this.processflow.zoomOut();
                 }
             },
+            'default': {
+                icon: 'processflow-default-status-icon',
+                fn: function () {
+                    this.processflow.setOperatingStatus('default');
+                }
+            },
             connection: {
                 icon: 'processflow-line-add-icon',
                 fn: function () {
-
+                    this.processflow.setOperatingStatus('connection');
                 }
             },
             remove: {
                 icon: 'processflow-line-remove-icon',
                 fn: function () {
-
+                    this.processflow.removeFlowLine();
                 }
             },
         };
@@ -1339,6 +1696,10 @@
         this.processflow.load(data);
     };
 
+    API.prototype.getData = function () {
+        return this.processflow.getData();
+    };
+
     API.prototype.zoomIn = function () {
         this.processflow.zoomIn();
     };
@@ -1347,6 +1708,16 @@
         this.processflow.zoomOut();
     };
 
+    API.prototype.removeLine = function () {
+        this.processflow.removeFlowLine();
+    };
+
+    API.prototype.setOperatingStatus = function (status) {
+        //默认状态：default
+        //连线状态：connection
+        this.processflow.setOperatingStatus(status);
+    };
+
     window.Processflow = API;
 
-}(jQuery, Snap, window));
+}(jQuery, Snap, window, console));
