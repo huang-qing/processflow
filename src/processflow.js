@@ -31,6 +31,7 @@
     }();
 
     function Processflow(options) {
+        debugger;
         this.options = $.extend(true, {
             query: '',
             data: {
@@ -87,8 +88,8 @@
             line: {
                 start: null,
                 end: null,
-                startProcessId: null,
-                endProcessId: null,
+                processIds: [],
+                //endProcessId: null,
                 error: null
             },
             flow: {},
@@ -454,7 +455,7 @@
             component = this.$componentContainer,
             process = this.$processContainer,
             size = this.size,
-            containerWidth = container.width(),
+            //containerWidth = container.width(),
             containerHeight = container.parent().height(),
             componentWidth = size.component.width * this.cache.scale;
 
@@ -469,8 +470,10 @@
         });
 
         process.css({
-            width: containerWidth - componentWidth - (containerHeight < size.component.height ? 22 : 1),
-            height: containerHeight
+            //width: containerWidth - componentWidth - (containerHeight < size.component.height ? 22 : 1),
+            height: containerHeight,
+            left: componentWidth,
+            right: 0
         });
     };
 
@@ -1134,7 +1137,8 @@
                 out: null,
                 back: false,
                 count: 1,
-                brokenLine: []
+                brokenLine: [],
+                path: []
             };
             this.renderLine(node, info);
         }
@@ -1170,12 +1174,13 @@
             processLine: null,
             processNode: null
         };
-        this.cache.line = {
-            start: null,
-            end: null,
-            startProcessId: null,
-            endProcessId: null
-        };
+        // this.cache.line = {
+        //     start: null,
+        //     end: null,
+        //     processIds: [],
+        //     error:null
+        //    // endProcessId: null
+        // };
     };
 
     Flowline.prototype.removeLine = function () {
@@ -1206,6 +1211,7 @@
         toNode = node.attr('data-to');
         fromId = node.attr('data-id');
 
+        info.path.push(fromId);
         //判断拆件
         if (nodeState === 'out') {
             //在其他流程线进行合件
@@ -1460,65 +1466,143 @@
     Flowline.prototype.addFlowLine = function (node) {
         var line = this.cache.line,
             id = node.attr('data-id'),
+            index = node.attr('data-index'),
             processId = node.parent().attr('data-id'),
             flow = this.cache.flow[processId],
             state = node.attr('data-state'),
             attr = this.config.node.attr,
             selectedAttr = this.config.node.selectAttr2,
             errorAttr = this.config.node.errorAttr,
+            //startFlow,
             toNode,
-            index,
-            length;
+            length,
+            i;
 
         if (line.error) {
             this.paper.select('[data-id="' + line.error + '"] rect').attr(attr);
             line.error = null;
         }
 
-        //合件工艺节点不允许拆件
-        if (state === 'in' && line.start === null) {
-            line.error = id;
-            node.select('rect').attr(errorAttr);
+
+        //重复点击工艺节点，取消选择
+        if (line.start === id) {
+            node.select('rect').attr(attr);
+            line.start = null;
         }
-        //判断流程中拆回件允许返回的节点，必须是最后一个合件节点之后的相邻节点
-        else if (line.start !== null && flow.brokenLine.length > 0) {
-            length = flow.brokenLine.length;
-            index = length % 2 === 0 ? length - 2 : length - 1;
-            toNode = this.getNextNode(this.paper.select('[data-id="' + flow.brokenLine[index].start + '"]'));
-
-            if (toNode.attr('data-id') == id) {
-                line.end = id;
-                line.endProcessId = processId;
-                node.select('rect').attr(selectedAttr);
-            }
-            else {
-                line.error = id;
-                node.select('rect').attr(errorAttr);
-            }
-
+        //合件工艺节点不允许拆件
+        else if (line.start === null && state === 'in') {
+            this.renderErrorFlowline(node);
         }
         else if (line.start === null) {
-            line.start = id;
-            line.startProcessId = processId;
-            node.select('rect').attr(selectedAttr);
+            this.renderStartFlowline(node);
         }
-        else if (line.startProcessId === processId) {
-            this.paper.select('[data-id="' + line.start + '"] rect').attr(attr);
-            line.start = id;
-            line.startProcessId = processId;
-            node.select('rect').attr(selectedAttr);
+        //不允许连线在已存在的流程中
+        else if (line.start !== null && this.hasNodeInProcessIds(id)) {
+            this.renderErrorFlowline(node);
+        }
+        //存在拆合件的流程
+        else if (line.start !== null && flow.brokenLine.length > 0) {
+            length = flow.brokenLine.length;
+            i = length % 2 === 0 ? length - 2 : length - 1;
+            toNode = this.getNextNode(this.paper.select('[data-id="' + flow.brokenLine[i].start + '"]'));
+            //流程合件未拆回
+            if (length % 2 === 1) {
+                //判断流程中拆回件允许返回的节点，必须是最后一个合件节点之后的相邻节点
+                if (toNode.attr('data-id') == id) {
+                    this.renderEndFlowline(node);
+                }
+                else {
+                    this.renderErrorFlowline(node);
+                }
+            }
+            //流程合件已拆回
+            else {
+                //只能选取最后一个拆回件之后的节点
+                i = toNode.attr('data-index');
+                if (i < index) {
+                    this.renderEndFlowline(node);
+                }
+                else {
+                    this.renderErrorFlowline(node);
+                }
+            }
         }
         else {
-            line.end = id;
-            line.endProcessId = processId;
-            node.select('rect').attr(selectedAttr);
+            this.renderEndFlowline(node);
         }
 
         if (line.start && line.end) {
             this.addFlowLineInData();
             this.paper.select('[data-id="' + line.start + '"] rect').attr(this.config.attr);
             this.paper.select('[data-id="' + line.end + '"] rect').attr(this.config.attr);
+            line.start = null;
+            line.end = null;
+            line.processIds = [];
         }
+    };
+
+    Flowline.prototype.queryNodeProcessIds = function (id) {
+        var flow = this.cache.flow,
+            path,
+            ids = [];
+
+        for (var i in flow) {
+            path = flow[i].path;
+            if (path.indexOf(id) !== -1) {
+                ids.push(i);
+            }
+        }
+
+        return ids;
+    };
+
+    Flowline.prototype.hasNodeInProcessIds = function (id) {
+        var line = this.cache.line,
+            processIds = line.processIds,
+            flow;
+
+        for (var i = 0, len = processIds.length; i < len; i++) {
+            flow = this.cache.flow[processIds[i]];
+            if (flow.path.indexOf(id) !== -1) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    Flowline.prototype.renderStartFlowline = function (node) {
+        var line = this.cache.line,
+            attr = this.config.node.attr,
+            selectedAttr = this.config.node.selectAttr2,
+            id = node.attr('data-id');
+
+        if (line.start) {
+            this.paper.select('[data-id="' + line.start + '"] rect').attr(attr);
+        }
+        line.start = id;
+        line.processIds = this.queryNodeProcessIds(id);
+        node.select('rect').attr(selectedAttr);
+    };
+
+    Flowline.prototype.renderEndFlowline = function (node) {
+        var line = this.cache.line,
+            //attr = this.config.node.attr,
+            selectedAttr = this.config.node.selectAttr2,
+            id = node.attr('data-id');
+
+        line.end = id;
+        //line.endProcessId = processId;
+        node.select('rect').attr(selectedAttr);
+    };
+
+    Flowline.prototype.renderErrorFlowline = function (node) {
+        var line = this.cache.line,
+            errorAttr = this.config.node.errorAttr,
+            id = node.attr('data-id');
+
+        line.error = id;
+        node.select('rect').attr(errorAttr);
     };
 
     Flowline.prototype.addFlowLineInData = function () {

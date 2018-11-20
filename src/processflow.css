@@ -7,6 +7,13 @@
     overflow-x: hidden; */
     overflow:hidden;
     position: relative;
+
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
 }
 
 .processflow-component-container
@@ -20,6 +27,7 @@
     display: inline-block;
     vertical-align: top;
     overflow-x:auto;
+    position: absolute;
 }
 
 .processflow-menu
@@ -86,8 +94,8 @@
 {
     cursor: default;
 }
-
+/* 
 .processflow-menu
 {
     display: none;
-}
+} */
