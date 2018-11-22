@@ -285,11 +285,19 @@ $(function () {
     var flowline7 = [
         {
             start: '1073',
+            end: '1058'
+        },
+        {
+            start: '1058',
             end: '1039'
         },
         {
-            start: '1057',
-            end: '1040'
+            start: '1049',
+            end: '1059'
+        },
+        {
+            start: '1060',
+            end: '1074'
         }
     ];
 
@@ -316,12 +324,6 @@ $(function () {
         }
     });
 
-    // processflow1.load({
-    //     processflow: flows,
-    //     flowline: flowline1
-    // });
-
-    return;
     var processflow2 = new Processflow({
         query: '#processflow2',
         data: {
@@ -375,6 +377,12 @@ $(function () {
         },
         autoResize: true
     });
+
+
+    // processflow1.load({
+    //     processflow: flows,
+    //     flowline: flowline1
+    // });
 
 
 }());

@@ -31,7 +31,6 @@
     }();
 
     function Processflow(options) {
-        debugger;
         this.options = $.extend(true, {
             query: '',
             data: {
@@ -78,6 +77,7 @@
             process: null,
             line: null
         };
+
         this.cache = {
             select: {
                 component: null,
@@ -89,10 +89,10 @@
                 start: null,
                 end: null,
                 processIds: [],
-                //endProcessId: null,
                 error: null
             },
             flow: {},
+            nodes: {},
             scale: 1,
             instance: {
                 processflow: this,
@@ -778,17 +778,35 @@
         var mainNode,
             topNode,
             bottomNode,
+            id,
+            path,
             node;
 
         mainNode = this.renderMainNode(x, y, info, index);
         topNode = this.renderSecondaryNode(x, y, 'top', info);
         bottomNode = this.renderSecondaryNode(x, y, 'bottom', info);
         node = setGroup(this.paper, [mainNode, topNode, bottomNode], this.config.className.node);
+
+        path = this.getPath(index);
+        id = this.getInfo(this.config.id, info).text;
+
+        this.cache.nodes[id] = {
+            id: id,
+            index: index,
+            path: path,
+            dx: 0,
+            state: {
+                out: null,
+                in: null
+            },
+            back: []
+        };
         node.attr({
             'data-index': index,
-            'data-path': this.getPath(index),
-            'data-id': this.getInfo(this.config.id, info).text
+            'data-path': path,
+            'data-id': id
         });
+
         this.bindMainNodeEvent(mainNode, info);
 
         return node;
@@ -913,18 +931,6 @@
 
     };
 
-    FlowChart.prototype.getState = function (name, info) {
-        var properties = this.config.property,
-            property = properties[name],
-            state = {};
-
-        if (property.state && typeof info === 'object') {
-            state = property.state[info.state] || {};
-        }
-
-        return state;
-    };
-
     FlowChart.prototype.renderText = function (x, y, name, info) {
         var element,
             property = this.config.property[name],
@@ -1000,16 +1006,16 @@
     Flowline.prototype.adjustNode = function (line) {
         var config = this.config,
             element = this.element,
-            fromNode = element.select('[data-id="' + line.start + '"]'),
-            toNode = element.select('[data-id="' + line.end + '"]'),
+            fromId = line.start,
+            toId = line.end,
+            fromNode = element.select('[data-id="' + fromId + '"]'),
+            toNode = element.select('[data-id="' + toId + '"]'),
             fromNodeBox = fromNode.getBBox(),
             toNodeBox = toNode.getBBox(),
             offsetX = config.node.width + config.line.width,
-            fromNodesId,
-            nextNode;
+            nodeInfo;
 
         this.setNodeState(fromNode, toNode);
-
         //当前节点与跳转节点x位置相同
         if (fromNodeBox.x === toNodeBox.x) {
             this.translateNodeX(toNode, offsetX);
@@ -1025,17 +1031,29 @@
             this.translateNodeX(toNode, offsetX);
         }
 
-        //调整与跳转节点关联节点的后续流程节点的位置
-        fromNodesId = toNode.attr('data-from');
-        if (fromNodesId) {
-            fromNodesId = fromNodesId.split(',');
-            for (var i = 0, len = fromNodesId.length; i < len - 1; i++) {
-                fromNode = element.select('[data-id="' + fromNodesId[i] + '"]');
-                nextNode = this.getNextNode(fromNode);
-                if (nextNode.getBBox().x < toNode.getBBox().x) {
-                    this.translateNodeX(nextNode, offsetX);
-                }
+        //查找合件节点关联的拆件节点，调整其下一个节点（合件拆回节点）的位置
+        nodeInfo = this.cache.nodes[toId];
+
+        this.adjustInStateNodes(nodeInfo, toNode, offsetX);
+    };
+
+    Flowline.prototype.adjustInStateNodes = function (nodeInfo, toNode, offsetX) {
+        var fromNode,
+            fromNodeId,
+            nextNode,
+            element = this.element;
+
+        offsetX = Math.floor(offsetX);
+
+        for (var i = 0, len = nodeInfo.state.in.length; i < len; i++) {
+            fromNodeId = nodeInfo.state.in[i].from;
+            fromNode = element.select('[data-id="' + fromNodeId + '"]');
+            //合件拆回的流程节点
+            nextNode = this.getNextNode(fromNode);
+            if (nextNode && Math.floor(nextNode.getBBox().x) < Math.floor(toNode.getBBox().x)) {
+                this.translateNodeX(nextNode, offsetX);
             }
+
         }
     };
 
@@ -1044,43 +1062,31 @@
             toProcessId = toNode.parent().attr('data-id'),
             fromId = fromNode.attr('data-id'),
             toId = toNode.attr('data-id'),
-            dataFromProcess,
-            dataToProcess,
-            dataTo,
-            dataFrom;
+            fromNodeInfo = this.cache.nodes[fromId],
+            toNodeInfo = this.cache.nodes[toId];
 
-        //拆件
-        if (fromNode.attr('data-state')) {
-            dataToProcess = fromNode.attr('data-to-process') + ',' + toProcessId;
-            dataTo = fromNode.attr('data-to') + ',' + toId;
+        if (!fromNodeInfo.state.out) {
+            fromNodeInfo.state.out = [];
         }
-        else {
-            dataToProcess = toProcessId;
-            dataTo = toId;
-        }
-
-        fromNode.attr({
-            'data-state': 'out',
-            'data-from-process': fromProcessId,
-            'data-to-process': dataToProcess,
-            'data-to': dataTo
+        fromNodeInfo.state.out.push({
+            from: fromId,
+            to: toId,
+            process: {
+                from: fromProcessId,
+                to: toProcessId
+            }
         });
 
-        //合件
-        if (toNode.attr('data-state')) {
-            dataFromProcess = toNode.attr('data-from-process') + ',' + fromProcessId;
-            dataFrom = toNode.attr('data-from') + ',' + fromId;
+        if (!toNodeInfo.state.in) {
+            toNodeInfo.state.in = [];
         }
-        else {
-            dataFromProcess = fromProcessId;
-            dataFrom = fromId;
-        }
-
-        toNode.attr({
-            'data-state': 'in',
-            'data-from-process': dataFromProcess,
-            'data-to-process': toProcessId,
-            'data-from': dataFrom
+        toNodeInfo.state.in.push({
+            from: fromId,
+            to: toId,
+            process: {
+                from: fromProcessId,
+                to: toProcessId
+            }
         });
     };
 
@@ -1102,13 +1108,18 @@
         var nodes,
             m,
             dx,
-            currentNode;
+            currentNode,
+            nodesInfo = this.cache.nodes,
+            nodeInfo,
+            out;
 
         nodes = node.parent().selectAll('[data-path^="' + node.attr('data-path') + '"]');
         // 位移
         for (var i = 0, len = nodes.items.length; i < len; i++) {
             currentNode = nodes[i];
-            dx = currentNode.attr('data-dx') || 0;
+            nodeInfo = nodesInfo[currentNode.attr('data-id')];
+
+            dx = nodeInfo.dx || 0;
             if (isNaN(dx)) {
                 dx = 0;
             }
@@ -1116,10 +1127,20 @@
                 dx = parseInt(dx);
             }
             dx += offsetX;
+
             m = new Snap.Matrix();
             m.translate(dx, 0);
-            currentNode.attr('data-dx', dx);
             currentNode.transform(m);
+
+            nodeInfo.dx = dx;
+            out = nodeInfo.state.out;
+            if (out && out.length > 0) {
+                for (var j = 0, lenj = out.length; j < lenj; j++) {
+                    currentNode = this.element.select('[data-id="' + out[j].to + '"]');
+                    this.translateNodeX(currentNode, dx);
+                }
+
+            }
         }
     };
 
@@ -1138,7 +1159,8 @@
                 back: false,
                 count: 1,
                 brokenLine: [],
-                path: []
+                path: [],
+                processPath: []
             };
             this.renderLine(node, info);
         }
@@ -1158,29 +1180,24 @@
             nodes = this.paper.selectAll('.' + this.config.className.node);
 
         nodes.attr({
-            transform: '',
-            'data-dx': '',
-            'data-to': '',
-            'data-from': '',
-            'data-to-process': '',
-            'data-from-process': '',
-            'data-state': ''
+            transform: ''
         });
 
         lines.remove();
 
         this.cache.flow = {};
+        this.cache.nodes = {};
         this.cache.select = {
             processLine: null,
             processNode: null
         };
-        // this.cache.line = {
-        //     start: null,
-        //     end: null,
-        //     processIds: [],
-        //     error:null
-        //    // endProcessId: null
-        // };
+        this.cache.line = {
+            start: null,
+            end: null,
+            processIds: [],
+            error: null
+        };
+
     };
 
     Flowline.prototype.removeLine = function () {
@@ -1191,83 +1208,100 @@
     };
 
     Flowline.prototype.renderLine = function (node, info) {
-        var nextNode,
-            nodeState,
-            toProcessId,
-            fromProcessId,
-            toNode,
+        var nodes = this.cache.nodes,
+            nextNode,
+            nextProcessId,
+            isOutState,
+            isInState,
+            nodeId,
+            nodeInfo,
+            processId,
+            processPath = info.processPath,
             isOut = false,
             isBack = false,
-            fromId,
             toId;
 
         if (!node) {
             return;
         }
 
-        nodeState = node.attr('data-state');
-        toProcessId = node.attr('data-to-process');
-        fromProcessId = node.attr('data-from-process');
-        toNode = node.attr('data-to');
-        fromId = node.attr('data-id');
+        nodeId = node.attr('data-id');
+        nodeInfo = this.cache.nodes[nodeId];
+        isOutState = nodeInfo.state.out ? true : false;
+        isInState = nodeInfo.state.in ? true : false;
 
-        info.path.push(fromId);
-        //判断拆件
-        if (nodeState === 'out') {
-            //在其他流程线进行合件
-            isOut = this.hasProcessId(fromProcessId, info.id) && info.out === null;
-            //拆件返回当前流程
-            isBack = this.hasProcessId(toProcessId, info.id) && info.out !== null;
+        info.path.push(nodeId);
+
+        processId = node.parent().attr('data-id');
+        if (processPath.indexOf(processId) === -1) {
+            processPath.push(processId);
         }
+
         //判断合件
-        else if (nodeState === 'in') {
+        if (isInState) {
             //合件从其他流程中拆回当前流程
-            if (info.out && info.back && this.hasProcessId(toProcessId, info.id)) {
+            if (info.out && info.back && this.hasProcessId(nodeInfo.state.in, info.id, 'to')) {
                 info.out = null;
                 info.back = false;
             }
-            //到其他流程中合件,保持状态
-            // else if (info.out && this.hasProcessId(fromProcessId, info.id)) {
-            // }
             //其他件在当前流程中进行合件，增加流程数量
-            else if (this.hasProcessId(toProcessId, info.id)) {
+            else if (this.hasProcessId(nodeInfo.state.in, info.id, 'to')) {
                 info.count++;
             }
         }
 
+        //判断拆件
+        if (isOutState) {
+            //在其他流程线进行合件
+            isOut = nodeInfo.back.length === 0 && this.hasProcessId(nodeInfo.state.out, processPath[processPath.length - 1], 'from')
+            //拆件返回当前流程
+            isBack = this.hasProcessId(nodeInfo.state.out, processPath[processPath.length - 2], 'to');
+        }
+
+        //当前流程存在节点合件，并马上再下一流程继续合件
+        if (isOutState && info.count > 1 &&
+            nodeInfo.state.in && nodeInfo.state.in.length === info.count - 1 &&
+            info.processPath.length === 1) {
+            //停止当前流程
+            return;
+        }
         //其他合件从当前流程拆回，当前流程继续往下走
-        if (nodeState === 'out' && info.count > 1) {
+        else if (isOutState && info.count > 1) {
             //强制判定为其他件拆回（项目要求），不是合件整体再到其他的流程中再次合件
             //实际真正的流程有可能存在上面排除的情况，由人工凭经验自行判断
             nextNode = this.getNextNode(node);
             this.renderStraightLine(node, nextNode);
             this.renderLine(nextNode, info);
         }
-        //合件到其他流程
-        else if (nodeState === 'out' && isOut) {
-            info.out = toProcessId;
-            nextNode = this.queryNode(null, toProcessId, toNode);
+        //从其他流程的合件中拆回，返回到当前流程
+        else if (isOutState && isBack) {
+            info.back = true;
+            processPath.pop();
+            nodes[nodeId].back.push(info.id);
+            //查找拆回的节点
+            nextNode = this.queryToNode(nodeInfo.state.out, processPath[processPath.length - 1], 'to');
             this.renderBrokenLine(node, nextNode, info.id);
 
             toId = nextNode.attr('data-id');
             info.brokenLine.push({
-                'start': fromId,
-                'end': toId,
+                'start': nodeId,
+                'end': toId
             });
 
             this.renderLine(nextNode, info);
         }
-        //从其他流程的合件中拆回，返回到当前流程
-        else if (nodeState == 'out' && isBack) {
-            info.back = true;
-            nextNode = this.queryNode(info.id, toProcessId, toNode);
-            this.renderBrokenLine(node, nextNode, info.id);
-
+        //合件到其他流程
+        else if (isOutState && isOut) {
+            nextNode = this.queryToNode(nodeInfo.state.out, null, 'to');
+            nextProcessId = nextNode.parent().attr('data-id');
             toId = nextNode.attr('data-id');
+
+            this.renderBrokenLine(node, nextNode, info.id);
             info.brokenLine.push({
-                'start': fromId,
-                'end': toId
+                'start': nodeId,
+                'end': toId,
             });
+            info.out = nextProcessId;
 
             this.renderLine(nextNode, info);
         }
@@ -1279,13 +1313,12 @@
 
     };
 
-    Flowline.prototype.hasProcessId = function (list, id) {
+    Flowline.prototype.hasProcessId = function (lines, id, type) {
         var item;
 
-        list = list.split(',');
-        for (var i = 0, len = list.length; i < len; i++) {
-            item = list[i];
-            if (item === id) {
+        for (var i in lines) {
+            item = lines[i];
+            if (item.process[type] === id) {
                 return true;
             }
         }
@@ -1293,20 +1326,14 @@
         return false;
     };
 
-    Flowline.prototype.queryNode = function (processId, processList, nodeList) {
-        var nodeId;
+    Flowline.prototype.queryToNode = function (lines, id, type) {
+        var item,
+            nodeId;
 
-        if (typeof processList === 'string') {
-            processList = processList.split(',');
-        }
-        if (typeof nodeList === 'string') {
-            nodeList = nodeList.split(',');
-        }
-
-        for (var i = 0, len = processList.length; i < len; i++) {
-            //指定流程id或任意流程id
-            if (processList[i] === processId || processId === null) {
-                nodeId = nodeList[i];
+        for (var i in lines) {
+            item = lines[i];
+            if (item.process[type] === id || id === null) {
+                nodeId = item.to;
                 break;
             }
         }
@@ -1317,6 +1344,8 @@
     Flowline.prototype.getPositionInfo = function (node, nextNode) {
         var nodeBox,
             nextNodeBox,
+            nodeId,
+            nextNodeId,
             startX,
             startY,
             endX,
@@ -1328,14 +1357,16 @@
             return null;
         }
 
+        nodeId = node.attr('data-id');
+        nextNodeId = nextNode.attr('data-id');
         rect = node.select('.' + this.config.className.main);
         nextRect = nextNode.select('.' + this.config.className.main);
 
         nodeBox = rect.getBBox();
         nextNodeBox = nextRect.getBBox();
-        startX = nodeBox.x + nodeBox.width + (parseInt(node.attr('data-dx')) || 0);
+        startX = nodeBox.x + nodeBox.width + (parseInt(this.cache.nodes[nodeId].dx) || 0);
         startY = nodeBox.y + nodeBox.height / 2;
-        endX = nextNodeBox.x + (parseInt(nextNode.attr('data-dx')) || 0);
+        endX = nextNodeBox.x + (parseInt(this.cache.nodes[nextNodeId].dx) || 0);
         endY = nextNodeBox.y + nodeBox.height / 2;
 
         return {
@@ -1471,9 +1502,6 @@
             flow = this.cache.flow[processId],
             state = node.attr('data-state'),
             attr = this.config.node.attr,
-            selectedAttr = this.config.node.selectAttr2,
-            errorAttr = this.config.node.errorAttr,
-            //startFlow,
             toNode,
             length,
             i;
@@ -1587,12 +1615,10 @@
 
     Flowline.prototype.renderEndFlowline = function (node) {
         var line = this.cache.line,
-            //attr = this.config.node.attr,
             selectedAttr = this.config.node.selectAttr2,
             id = node.attr('data-id');
 
         line.end = id;
-        //line.endProcessId = processId;
         node.select('rect').attr(selectedAttr);
     };
 
