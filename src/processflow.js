@@ -311,6 +311,13 @@
                 fill: 'none'
             }
         },
+        arrow: {
+            attr: {
+                stroke: '#4695F9',
+                strokeWidth: 1,
+                fill: '4695F9'
+            }
+        },
         className: {
             main: 'procesflow-process-node-main',
             top: 'processflow-process-node-top',
@@ -957,7 +964,19 @@
         this.cache = cache;
     }
 
+    Flowline.prototype.renderArrow = function () {
+        var arrow;
+
+        arrow = this.paper.path('M0,0 L0,6 L9,3 z').attr(this.config.arrow.attr);
+
+        arrow.marker(0, 0, 6, 4, 8, 3).attr({
+            id: 'arrow',
+            viewBox: '0 0 6 6'
+        });
+    };
+
     Flowline.prototype.render = function () {
+        this.renderArrow();
         this.adjustProcessNode();
         this.renderAllLine();
     };
@@ -1389,6 +1408,7 @@
 
         element = this.paper.line(position.x1, position.y1, position.x2, position.y2);
         element.attr(this.config.line.attr);
+        $(element.node).attr('marker-end', 'url(#arrow)');
         element.attr('class', this.config.className.line);
         element.attr({
             'data-from': node.attr('data-id'),
@@ -1427,6 +1447,10 @@
             'data-from': node.attr('data-id'),
             'data-to': nextNode.attr('data-id'),
             'data-process-id': processId
+        });
+        $(element.node).attr({
+            'marker-end': 'url(#arrow)'
+            //'marker-mid': 'url(#arrow)'
         });
         element.attr('class', [this.config.className.line, this.config.className.brokenLine].join(' '));
 
