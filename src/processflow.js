@@ -42,6 +42,9 @@
                 component: {
                     contextmenu: function (e, data, config) {
                         //console.log('component contextmenu event');
+                    },
+                    click: function (e, data, config) {
+                        //console.log('component click event');
                     }
                 },
                 process: {
@@ -172,6 +175,9 @@
         rect: {
             attr: {
                 opacity: 0
+            },
+            selectAttr: {
+                opacity: .05
             }
         },
         className: {
@@ -302,7 +308,7 @@
             width: 12 * 6,
             attr: {
                 stroke: '#4695F9',
-                strokeWidth: 1,
+                strokeWidth: 2,
                 fill: 'none'
             },
             selectAttr: {
@@ -618,7 +624,7 @@
         this.cache = cache;
 
         this.element = this.create();
-        this.bindEvent();
+        this.bindEvent(data);
     }
 
     Component.prototype.create = function () {
@@ -732,15 +738,37 @@
         return element;
     };
 
-    Component.prototype.bindEvent = function () {
+    Component.prototype.bindEvent = function (info) {
         var element = this.element,
             self = this;
 
         element.mouseup(function (e) {
+
             if (e.button === 2) {
-                self.config.events.contextmenu(e, self.data, self.config);
+                self.selectComponent(element, info);
+                self.config.events.contextmenu(e, info, self.config);
+            }
+            else if (e.button === 0) {
+                self.selectComponent(element, info);
+                self.config.events.click(e, info, self.config);
             }
         });
+    };
+
+    Component.prototype.selectComponent = function (node, info) {
+        var attr = this.config.rect.attr,
+            selectAttr = this.config.rect.selectAttr,
+            component = this.cache.select.component;
+
+        if (component && component.node) {
+            component.node.select('rect').attr(attr);
+        }
+        component = {};
+        component.node = node;
+        component.info = info;
+        this.cache.select.component = component;
+
+        node.select('rect').attr(selectAttr);
     };
 
     function FlowChart(paper, data, config, x, y, cache) {
@@ -856,10 +884,11 @@
 
         element.mouseup(function (e) {
             if (e.button === 2) {
+                self.selectNode(this, info);
                 self.config.events.node.contextmenu(e, info, self.config);
             }
             else if (e.button === 0) {
-                self.selectNode(this);
+                self.selectNode(this, info);
                 if (self.cache.operatingStatus !== 'connection') {
                     self.config.events.node.click(e, info, self.config);
                 }
@@ -868,16 +897,16 @@
 
     };
 
-    FlowChart.prototype.selectNode = function (element) {
+    FlowChart.prototype.selectNode = function (element, info) {
         var selected = this.cache.select.processLine || this.cache.select.processNode,
             node = element.select('rect'),
             flowline = this.cache.instance.flowline,
             attr;
 
         if (this.cache.select.processLine) {
-            selected.attr(this.config.attr);
+            selected.node.attr(this.config.line.attr);
         } else if (this.cache.select.processNode) {
-            selected.select('rect').attr(this.config.attr);
+            selected.node.select('rect').attr(this.config.attr);
         }
 
         if (this.cache.operatingStatus === 'connection') {
@@ -889,7 +918,9 @@
             attr = this.config.node.selectAttr;
             node.attr(attr);
             this.cache.select.processLine = null;
-            this.cache.select.processNode = element;
+            this.cache.select.processNode = {};
+            this.cache.select.processNode.node = element;
+            this.cache.select.processNode.info = info;
         }
 
     };
@@ -1332,12 +1363,7 @@
     Flowline.prototype.analysisStateOut = function (node, info, nodeInfo) {
         var processPath = info.processPath,
             nextNode,
-            prevNode,
             nextNodeInfo,
-            prevNodeInfo,
-            toNode,
-            toNodeProcessId,
-            toNodeInfo,
             nodeId = nodeInfo.id,
             processId = node.parent().attr('data-id'),
             isOut = false;
@@ -1367,18 +1393,6 @@
         if (info.count > 1) {
             return false;
         }
-
-        // //4.
-        // toNode = this.queryToNode(nodeInfo.state.out, null, 'to');
-        // toNodeProcessId = toNode.parent().attr('data-id');
-        // prevNode = this.getPrevNode(toNode);
-        // while (prevNode) {
-        //     prevNodeInfo = this.nodes[prevNode.attr('data-id')];
-        //     if (this.hasProcessId(prevNodeInfo.state.out, toNodeProcessId, 'from')) {
-        //         return false;
-        //     }
-        //     prevNode = this.getPrevNode(prevNode);
-        // }
 
         //5.
         //如果不是首次合件，需要判断在当前节点中，后续的工艺节点是否有合件拆回的流程
@@ -1543,13 +1557,14 @@
             line = element;
 
         if (this.cache.select.processLine) {
-            selected.attr(this.config.attr);
+            selected.node.attr(this.config.attr);
         } else if (this.cache.select.processNode) {
-            selected.select('rect').attr(this.config.attr);
+            selected.node.select('rect').attr(this.config.attr);
         }
 
         line.attr(this.config.node.selectAttr);
-        this.cache.select.processLine = line;
+        this.cache.select.processLine = {};
+        this.cache.select.processLine.node = line;
         this.cache.select.processNode = null;
     };
 
@@ -1928,6 +1943,31 @@
         //默认状态：default
         //连线状态：connection
         this.processflow.setOperatingStatus(status);
+    };
+
+    //1. item 零件
+    //2. process 工艺节点
+    //3. line 工艺连线
+    API.prototype.getSelected = function (type) {
+        var processflow = this.processflow,
+            info;
+
+        switch (type) {
+            case 'process':
+                info = processflow.cache.select.component.info;
+                break;
+            case 'item':
+                info = processflow.cache.select.processNode.info;
+                break;
+            case 'line':
+                info = processflow.cache.select.processLine.info;
+                break;
+            default:
+                info = null;
+                break;
+        }
+
+        return info;
     };
 
     window.Processflow = API;

@@ -28,6 +28,7 @@ module.exports = {
             {
                 "args": "none"// 允许声明未使用变量,参数不检查
             }
-        ]
+        ],
+        "indent":'off'
     }
 };
