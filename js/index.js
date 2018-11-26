@@ -301,6 +301,45 @@ $(function () {
         }
     ];
 
+    var flowline8 = [
+        {
+            start: '1038',
+            end: '1056'
+        },
+        {
+            start: '1073',
+            end: '1057'
+        },
+        {
+            start: '1058',
+            end: '1074'
+        },
+        {
+            start: '1059',
+            end: '1039'
+        }
+    ];
+
+    var flowline9 = [
+        {
+            start: '1038',
+            end: '1056'
+        },
+        {
+            start: '1073',
+            end: '1057'
+        },
+        // {
+        //     start: '1058',
+        //     end: '1039'
+        // },
+        {
+            start: '1059',
+            end: '1074'
+        }
+    ];
+
+
     var processflow1 = new Processflow({
         query: '#processflow1',
         data: {
@@ -374,6 +413,24 @@ $(function () {
         data: {
             processflow: flows,
             flowline: flowline7
+        },
+        autoResize: true
+    });
+
+    var processflow8 = new Processflow({
+        query: '#processflow8',
+        data: {
+            processflow: flows,
+            flowline: flowline8
+        },
+        autoResize: true
+    });
+
+    var processflow9 = new Processflow({
+        query: '#processflow9',
+        data: {
+            processflow: flows,
+            flowline: flowline9
         },
         autoResize: true
     });

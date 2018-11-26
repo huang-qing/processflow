@@ -796,7 +796,7 @@
 
         path = this.getPath(index);
         id = this.getInfo(this.config.id, info).text;
-
+        //流程节点信息
         this.cache.nodes[id] = {
             id: id,
             index: index,
@@ -962,6 +962,8 @@
         this.element = element;
         this.config = config;
         this.cache = cache;
+        this.nodes = JSON.parse(JSON.stringify(this.cache.nodes));
+        this.waitNodes = [];
     }
 
     Flowline.prototype.renderArrow = function () {
@@ -1051,7 +1053,7 @@
         }
 
         //查找合件节点关联的拆件节点，调整其下一个节点（合件拆回节点）的位置
-        nodeInfo = this.cache.nodes[toId];
+        nodeInfo = this.nodes[toId];
 
         this.adjustInStateNodes(nodeInfo, toNode, offsetX);
     };
@@ -1081,8 +1083,8 @@
             toProcessId = toNode.parent().attr('data-id'),
             fromId = fromNode.attr('data-id'),
             toId = toNode.attr('data-id'),
-            fromNodeInfo = this.cache.nodes[fromId],
-            toNodeInfo = this.cache.nodes[toId];
+            fromNodeInfo = this.nodes[fromId],
+            toNodeInfo = this.nodes[toId];
 
         if (!fromNodeInfo.state.out) {
             fromNodeInfo.state.out = [];
@@ -1128,7 +1130,7 @@
             m,
             dx,
             currentNode,
-            nodesInfo = this.cache.nodes,
+            nodesInfo = this.nodes,
             nodeInfo,
             out;
 
@@ -1179,7 +1181,8 @@
                 count: 1,
                 brokenLine: [],
                 path: [],
-                processPath: []
+                processPath: [],
+                outList: []
             };
             this.renderLine(node, info);
         }
@@ -1205,7 +1208,7 @@
         lines.remove();
 
         this.cache.flow = {};
-        this.cache.nodes = {};
+        this.nodes = JSON.parse(JSON.stringify(this.cache.nodes));
         this.cache.select = {
             processLine: null,
             processNode: null
@@ -1216,7 +1219,7 @@
             processIds: [],
             error: null
         };
-
+        this.waitNodes = [];
     };
 
     Flowline.prototype.removeLine = function () {
@@ -1227,11 +1230,9 @@
     };
 
     Flowline.prototype.renderLine = function (node, info) {
-        var nodes = this.cache.nodes,
+        var nodes = this.nodes,
             nextNode,
             nextProcessId,
-            isOutState,
-            isInState,
             nodeId,
             nodeInfo,
             processId,
@@ -1245,9 +1246,7 @@
         }
 
         nodeId = node.attr('data-id');
-        nodeInfo = this.cache.nodes[nodeId];
-        isOutState = nodeInfo.state.out ? true : false;
-        isInState = nodeInfo.state.in ? true : false;
+        nodeInfo = this.nodes[nodeId];
 
         info.path.push(nodeId);
 
@@ -1256,44 +1255,16 @@
             processPath.push(processId);
         }
 
-        //判断合件
-        if (isInState) {
-            //合件从其他流程中拆回当前流程
-            if (info.out && info.back && this.hasProcessId(nodeInfo.state.in, info.id, 'to')) {
-                info.out = null;
-                info.back = false;
-            }
-            //其他件在当前流程中进行合件，增加流程数量
-            else if (this.hasProcessId(nodeInfo.state.in, info.id, 'to')) {
-                info.count++;
-            }
+        this.analysisStateIn(node, info, nodeInfo);
+        //优先判断解析合件拆回流程
+        isBack = this.analysisStateBack(node, info, nodeInfo);
+        //判断解析拆件流程
+        if (!isBack) {
+            isOut = this.analysisStateOut(node, info, nodeInfo);
         }
 
-        //判断拆件
-        if (isOutState) {
-            //在其他流程线进行合件
-            isOut = nodeInfo.back.length === 0 && this.hasProcessId(nodeInfo.state.out, processPath[processPath.length - 1], 'from')
-            //拆件返回当前流程
-            isBack = this.hasProcessId(nodeInfo.state.out, processPath[processPath.length - 2], 'to');
-        }
-
-        //当前流程存在节点合件，并马上再下一流程继续合件
-        if (isOutState && info.count > 1 &&
-            nodeInfo.state.in && nodeInfo.state.in.length === info.count - 1 &&
-            info.processPath.length === 1) {
-            //停止当前流程
-            return;
-        }
-        //其他合件从当前流程拆回，当前流程继续往下走
-        else if (isOutState && info.count > 1) {
-            //强制判定为其他件拆回（项目要求），不是合件整体再到其他的流程中再次合件
-            //实际真正的流程有可能存在上面排除的情况，由人工凭经验自行判断
-            nextNode = this.getNextNode(node);
-            this.renderStraightLine(node, nextNode);
-            this.renderLine(nextNode, info);
-        }
         //从其他流程的合件中拆回，返回到当前流程
-        else if (isOutState && isBack) {
+        if (isBack) {
             info.back = true;
             processPath.pop();
             nodes[nodeId].back.push(info.id);
@@ -1310,7 +1281,7 @@
             this.renderLine(nextNode, info);
         }
         //合件到其他流程
-        else if (isOutState && isOut) {
+        else if (isOut) {
             nextNode = this.queryToNode(nodeInfo.state.out, null, 'to');
             nextProcessId = nextNode.parent().attr('data-id');
             toId = nextNode.attr('data-id');
@@ -1321,6 +1292,7 @@
                 'end': toId,
             });
             info.out = nextProcessId;
+            info.outList.push(nodeId);
 
             this.renderLine(nextNode, info);
         }
@@ -1330,6 +1302,113 @@
             this.renderLine(nextNode, info);
         }
 
+        // //多件合件，允许分支
+        // if (isOut && info.count > 1 &&
+        //     !(nodeInfo.state.in && nodeInfo.state.in.length === info.count - 1)) {
+        //     nextNode = this.getNextNode(node);
+        //     this.renderStraightLine(node, nextNode, info.id);
+        //     this.renderLine(nextNode, info);
+        // }
+
+    };
+
+    Flowline.prototype.analysisStateIn = function (node, info, nodeInfo) {
+        if (!nodeInfo.state.in) {
+            return;
+        }
+
+        //合件从其他流程中拆回当前流程
+        if (info.out && info.back && this.hasProcessId(nodeInfo.state.in, info.id, 'to')) {
+            info.out = null;
+            info.back = false;
+        }
+        //其他件在当前流程中进行合件，增加流程数量
+        else if (this.hasProcessId(nodeInfo.state.in, info.id, 'to')) {
+            info.count++;
+        }
+
+    };
+
+    Flowline.prototype.analysisStateOut = function (node, info, nodeInfo) {
+        var processPath = info.processPath,
+            nextNode,
+            prevNode,
+            nextNodeInfo,
+            prevNodeInfo,
+            toNode,
+            toNodeProcessId,
+            toNodeInfo,
+            nodeId = nodeInfo.id,
+            processId = node.parent().attr('data-id'),
+            isOut = false;
+
+        if (!nodeInfo.state.out) {
+            return false;
+        }
+
+        //1.判断当前的流程节点所在装配线上是跳转合件状态时，执行合件流程
+        if (processPath.length > 1 && this.cache.flow[processId] && this.cache.flow[processId].outList.indexOf(nodeId) !== -1) {
+            return true;
+        }
+
+        //2.判断是否存在合件的状态
+        isOut = nodeInfo.back.length === 0 && this.hasProcessId(nodeInfo.state.out, processPath[processPath.length - 1], 'from');
+
+        if (!isOut) {
+            return false;
+        }
+
+        //3.在当前节点进行合件后立刻跳转的其他的装配线继续合件
+        if (nodeInfo.state.in && nodeInfo.state.in.length === info.count - 1) {
+            return true;
+        }
+
+        //4.在当前装配线进行过合件，本流程强制不执行拆件操作
+        if (info.count > 1) {
+            return false;
+        }
+
+        // //4.
+        // toNode = this.queryToNode(nodeInfo.state.out, null, 'to');
+        // toNodeProcessId = toNode.parent().attr('data-id');
+        // prevNode = this.getPrevNode(toNode);
+        // while (prevNode) {
+        //     prevNodeInfo = this.nodes[prevNode.attr('data-id')];
+        //     if (this.hasProcessId(prevNodeInfo.state.out, toNodeProcessId, 'from')) {
+        //         return false;
+        //     }
+        //     prevNode = this.getPrevNode(prevNode);
+        // }
+
+        //5.
+        //如果不是首次合件，需要判断在当前节点中，后续的工艺节点是否有合件拆回的流程
+        //如果存在，不执行本次的合件流程
+        if (processPath.length > 1) {
+            nextNode = this.getNextNode(node);
+            while (nextNode) {
+                nextNodeInfo = this.nodes[nextNode.attr('data-id')];
+                if (this.hasProcessId(nextNodeInfo.state.out, processPath[processPath.length - 2], 'to')) {
+                    return false;
+                }
+                nextNode = this.getNextNode(nextNode);
+            }
+        }
+
+        return isOut;
+
+    };
+
+    Flowline.prototype.analysisStateBack = function (node, info, nodeInfo) {
+        var processPath = info.processPath,
+            isBack;
+
+        if (!nodeInfo.state.out) {
+            return false;
+        }
+        //拆件返回当前流程,优先执行返回流程
+        isBack = this.hasProcessId(nodeInfo.state.out, processPath[processPath.length - 2], 'to');
+
+        return isBack;
     };
 
     Flowline.prototype.hasProcessId = function (lines, id, type) {
@@ -1383,9 +1462,9 @@
 
         nodeBox = rect.getBBox();
         nextNodeBox = nextRect.getBBox();
-        startX = nodeBox.x + nodeBox.width + (parseInt(this.cache.nodes[nodeId].dx) || 0);
+        startX = nodeBox.x + nodeBox.width + (parseInt(this.nodes[nodeId].dx) || 0);
         startY = nodeBox.y + nodeBox.height / 2;
-        endX = nextNodeBox.x + (parseInt(this.cache.nodes[nextNodeId].dx) || 0);
+        endX = nextNodeBox.x + (parseInt(this.nodes[nextNodeId].dx) || 0);
         endY = nextNodeBox.y + nodeBox.height / 2;
 
         return {
@@ -1535,7 +1614,6 @@
             line.error = null;
         }
 
-
         //重复点击工艺节点，取消选择
         if (line.start === id) {
             node.select('rect').attr(attr);
@@ -1558,7 +1636,7 @@
             i = length % 2 === 0 ? length - 2 : length - 1;
             toNode = this.getNextNode(this.paper.select('[data-id="' + flow.brokenLine[i].start + '"]'));
             //流程合件未拆回
-            if (length % 2 === 1) {
+            if (length % 2 === 1 || flow.processPath.length > 2) {
                 //判断流程中拆回件允许返回的节点，必须是最后一个合件节点之后的相邻节点
                 if (toNode.attr('data-id') == id) {
                     this.renderEndFlowline(node);
