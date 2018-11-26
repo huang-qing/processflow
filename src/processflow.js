@@ -62,7 +62,8 @@
                         }
                     }
                 }
-            }
+            },
+            showMenu: true
         }, options);
 
         this.config = {
@@ -354,7 +355,7 @@
             this.create();
             this.resize();
             this.renderFlowline();
-            this.renderMenu();
+            this.options.showMenu ? this.renderMenu() : null;
             this.bindEvent();
         }
     };
@@ -915,6 +916,7 @@
             flowline.addFlowLine(element.parent());
         }
         else {
+            flowline.recoveryFlowLineAttr();
             attr = this.config.node.selectAttr;
             node.attr(attr);
             this.cache.select.processLine = null;
@@ -1571,6 +1573,7 @@
     Flowline.prototype.removeFlowLine = function () {
         var cache = this.cache,
             selectLine = cache.select.processLine,
+            node,
             processId,
             startId,
             endId,
@@ -1582,9 +1585,10 @@
             return;
         }
 
-        processId = selectLine.attr('data-process-id');
-        startId = selectLine.attr('data-from');
-        endId = selectLine.attr('data-to');
+        node = selectLine.node;
+        processId = node.attr('data-process-id');
+        startId = node.attr('data-from');
+        endId = node.attr('data-to');
 
         list = cache.flow[processId].brokenLine;
 
@@ -1678,12 +1682,28 @@
 
         if (line.start && line.end) {
             this.addFlowLineInData();
-            this.paper.select('[data-id="' + line.start + '"] rect').attr(this.config.attr);
-            this.paper.select('[data-id="' + line.end + '"] rect').attr(this.config.attr);
-            line.start = null;
-            line.end = null;
-            line.processIds = [];
+            this.recoveryFlowLineAttr();
+            this.updateAllLine();
         }
+    };
+
+    Flowline.prototype.recoveryFlowLineAttr = function () {
+        var line = this.cache.line,
+            attr = this.config.attr;
+
+        if (line.error) {
+            this.paper.select('[data-id="' + line.error + '"] rect').attr(attr);
+            line.error = null;
+        }
+        if (line.start) {
+            this.paper.select('[data-id="' + line.start + '"] rect').attr(attr);
+            line.start = null;
+        }
+        if (line.end) {
+            this.paper.select('[data-id="' + line.end + '"] rect').attr(attr);
+            line.end = null;
+        }
+        line.processIds = [];
     };
 
     Flowline.prototype.queryNodeProcessIds = function (id) {
@@ -1782,8 +1802,6 @@
             start: fromId,
             end: toId
         });
-
-        this.updateAllLine();
     };
 
     Flowline.prototype.removeFlowlineByProcessIdInData = function (node, fromProcessId, toProcessId) {
