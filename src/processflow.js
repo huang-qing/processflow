@@ -282,25 +282,25 @@
                 'stroke-dasharray': [4, 2]
             },
             state: {
-                new: {
+                'new': {
                     fill: '#CCCCCC'
                 },
-                audit: {
+                'audit': {
                     fill: '#C73AF6'
                 },
-                audited: {
+                'audited': {
                     fill: '#5B9CFE'
                 },
-                dispatched: {
+                'dispatched': {
                     fill: '#DCD079'
                 },
-                machining: {
+                'machining': {
                     fill: '#F9CC9D'
                 },
-                pause: {
+                'pause': {
                     fill: '#E45C44'
                 },
-                complete: {
+                'complete': {
                     fill: '#36DE81'
                 }
             }
@@ -1999,10 +1999,10 @@
             info;
 
         switch (type) {
-            case 'process':
+            case 'item':
                 info = processflow.cache.select.component.info;
                 break;
-            case 'item':
+            case 'process':
                 info = processflow.cache.select.processNode.info;
                 break;
             case 'line':
