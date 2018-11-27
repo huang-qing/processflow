@@ -313,7 +313,7 @@
                 fill: 'none'
             },
             selectAttr: {
-                stroke: '#007ACC',
+                stroke: '#4695F9',
                 strokeWidth: 3,
                 fill: 'none'
             }
@@ -322,7 +322,7 @@
             attr: {
                 stroke: '#4695F9',
                 strokeWidth: 1,
-                fill: '4695F9'
+                fill: '#4695F9'
             }
         },
         className: {
@@ -600,8 +600,8 @@
         var c_config = this.config.component,
             p_config = this.config.process;
 
-        this.component = new Component(this.componentPaper, this.data.component, c_config, this.x, this.y, this.cache);
-        this.flowChart = new FlowChart(this.processPaper, this.data.process, p_config, this.x + 2, this.y + Math.floor(c_config.height / 2), this.cache);
+        this.component = new Component(this.componentPaper, this.data.component, c_config, this.x, this.y, this.cache, this);
+        this.flowChart = new FlowChart(this.processPaper, this.data.process, p_config, this.x + 2, this.y + Math.floor(c_config.height / 2), this.cache, this);
 
         return {
             component: this.component,
@@ -609,9 +609,10 @@
         };
     };
 
-    function Component(paper, data, config, x, y, cache) {
+    function Component(paper, data, config, x, y, cache, panel) {
         this.paper = paper;
         this.data = data;
+        this.panel = panel;
         this.x = x;
         this.y = y;
         this.config = config;
@@ -746,35 +747,42 @@
         element.mouseup(function (e) {
 
             if (e.button === 2) {
-                self.selectComponent(element, info);
+                self.selectComponent(element, info, true);
                 self.config.events.contextmenu(e, info, self.config);
             }
             else if (e.button === 0) {
-                self.selectComponent(element, info);
+                self.selectComponent(element, info, true);
                 self.config.events.click(e, info, self.config);
             }
         });
     };
 
-    Component.prototype.selectComponent = function (node, info) {
+    Component.prototype.selectComponent = function (node, info, isReconverNode) {
         var attr = this.config.rect.attr,
             selectAttr = this.config.rect.selectAttr,
-            component = this.cache.select.component;
+            component = this.cache.select.component,
+            flowChart = this.cache.flowChart;
 
         if (component && component.node) {
             component.node.select('rect').attr(attr);
         }
+
         component = {};
         component.node = node;
         component.info = info;
         this.cache.select.component = component;
 
         node.select('rect').attr(selectAttr);
+
+        if (isReconverNode) {
+            flowChart.recoveryNodeAttr();
+        }
     };
 
-    function FlowChart(paper, data, config, x, y, cache) {
+    function FlowChart(paper, data, config, x, y, cache, panel) {
         this.paper = paper;
         this.data = data;
+        this.panel = panel;
         this.x = x;
         this.y = y;
         this.config = config;
@@ -784,6 +792,7 @@
         };
         this.element;
         this.cache = cache;
+        this.cache.flowChart = this;
 
         this.element = this.create();
     }
@@ -902,7 +911,8 @@
         var selected = this.cache.select.processLine || this.cache.select.processNode,
             node = element.select('rect'),
             flowline = this.cache.instance.flowline,
-            attr;
+            attr,
+            component = this.panel.component;
 
         if (this.cache.select.processLine) {
             selected.node.attr(this.config.line.attr);
@@ -925,6 +935,22 @@
             this.cache.select.processNode.info = info;
         }
 
+        //关联选中component
+        component.selectComponent(component.element, component.data, false);
+
+    };
+
+    FlowChart.prototype.recoveryNodeAttr = function () {
+        var selected = this.cache.select;
+
+        if (selected.processLine) {
+            selected.processLine.node.attr(this.config.line.attr);
+        }
+        if (selected.processNode) {
+            selected.processNode.node.select('rect').attr(this.config.attr);
+        }
+        this.cache.select.processNode = null;
+        this.cache.select.processLine = null;
     };
 
     FlowChart.prototype.renderSecondaryNode = function (x, y, type, info) {
@@ -1556,15 +1582,17 @@
 
     Flowline.prototype.selectLine = function (element) {
         var selected = this.cache.select.processLine || this.cache.select.processNode,
-            line = element;
+            line = element,
+            attr = this.config.line.attr,
+            selectedAttr = this.config.line.selectAttr;
 
         if (this.cache.select.processLine) {
-            selected.node.attr(this.config.attr);
+            selected.node.attr(attr);
         } else if (this.cache.select.processNode) {
-            selected.node.select('rect').attr(this.config.attr);
+            selected.node.select('rect').attr(attr);
         }
 
-        line.attr(this.config.node.selectAttr);
+        line.attr(selectedAttr);
         this.cache.select.processLine = {};
         this.cache.select.processLine.node = line;
         this.cache.select.processNode = null;
