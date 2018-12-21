@@ -26,7 +26,7 @@
         var i = 1;
 
         return function () {
-            return i++;
+            return ''+i++;
         };
     }();
 
@@ -1676,15 +1676,16 @@
             flow = this.cache.flow[processId],
             state = node.attr('data-state'),
             attr = this.config.node.cancelSelectAttr,
+            nodes = this.nodes,
             toNode,
             length,
-            i;
-  
+            i,
+            len;
+
         if (line.error) {
             this.paper.select('[data-id="' + line.error + '"] rect').attr(attr);
             line.error = null;
         }
-
         //重复点击工艺节点，取消选择
         if (line.start === id) {
             node.select('rect').attr(attr);
@@ -1694,11 +1695,17 @@
         else if (line.start === null && state === 'in') {
             this.renderErrorFlowline(node);
         }
+        //不在流程中的节点不允许为起始节点
         else if (line.start === null && flow.path.indexOf(id) === -1) {
             this.renderErrorFlowline(node);
         }
         else if (line.start === null) {
             this.renderStartFlowline(node);
+        }
+        //相同装配线上的节点不用连接
+        else if (line.start !== null &&
+            nodes[line.start].processId === nodes[id].processId) {
+            this.renderErrorFlowline(node);
         }
         //不允许连线在已存在的流程中
         else if (line.start !== null && this.hasNodeInProcessIds(id)) {
@@ -1732,6 +1739,13 @@
             }
         }
         else {
+            //排除重复连线
+            for (i = 0, len = this.data.length; i < len; i++) {
+                if (this.data[i].start === line.start && this.data[i].end === id) {
+                    this.renderErrorFlowline(node);
+                    return;
+                }
+            }
             this.renderEndFlowline(node);
         }
 

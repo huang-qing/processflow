@@ -15,7 +15,8 @@ $(function () {
                 {
                     id: {
                         text: 'R302',
-                        state: 'new'
+                        //state: 'new',
+                        state: 'dispatched'
                     },
                     index: 1,
                     unique: {
