@@ -276,6 +276,11 @@
                 strokeWidth: 3,
                 'stroke-dasharray': [4, 2]
             },
+            cancelSelectAttr: {
+                stroke: '#4695F9',
+                strokeWidth: 1,
+                'stroke-dasharray': 0
+            },
             errorAttr: {
                 stroke: '#EC4D3C',
                 strokeWidth: 3,
@@ -347,7 +352,6 @@
             strokeWidth: 3
         },
         id: 'unique'
-
     };
 
     Processflow.prototype.render = function () {
@@ -805,21 +809,22 @@
             config = this.config,
             nodeWidth = config.node.width,
             lineWidth = config.line.width,
-            node;
+            node,
+            processId = guid();
 
         for (var i = 0, len = data.length; i < len; i++) {
             info = data[i];
-            this.elements.nodes.push(this.renderNode(startX + i * (nodeWidth + lineWidth), startY, info, i + 1));
+            this.elements.nodes.push(this.renderNode(startX + i * (nodeWidth + lineWidth), startY, info, i + 1, processId));
         }
 
         node = setGroup(this.paper, this.elements.nodes.concat(this.elements.lines), this.config.className.process);
         node.attr({
-            'data-id': guid()
+            'data-id': processId
         });
         return node;
     };
 
-    FlowChart.prototype.renderNode = function (x, y, info, index) {
+    FlowChart.prototype.renderNode = function (x, y, info, index, processId) {
         var mainNode,
             topNode,
             bottomNode,
@@ -836,6 +841,7 @@
         id = this.getInfo(this.config.id, info).text;
         //流程节点信息
         this.cache.nodes[id] = {
+            processId: processId,
             id: id,
             index: index,
             path: path,
@@ -937,7 +943,6 @@
 
         //关联选中component
         component.selectComponent(component.element, component.data, false);
-
     };
 
     FlowChart.prototype.recoveryNodeAttr = function () {
@@ -1047,14 +1052,19 @@
             a, b,
             line,
             data = this.data,
+            nodes = this.nodes,
             temp;
 
         if (!data) {
             return;
         }
 
-        for (i = 0, len = data.length; i < len; i++) {
+        for (len = data.length, i = len - 1; i >= 0; i--) {
             line = data[i];
+            if (nodes[line.start].processId === nodes[line.end].processId) {
+                data.splice(i, 1);
+            }
+
             line.index = parseInt(this.element.select('[data-id="' + line.start + '"]').attr('data-index'));
         }
 
@@ -1071,6 +1081,7 @@
             }
         }
     };
+
 
     Flowline.prototype.adjustProcessNode = function () {
         var line,
@@ -1268,10 +1279,9 @@
 
         this.cache.flow = {};
         this.nodes = JSON.parse(JSON.stringify(this.cache.nodes));
-        this.cache.select = {
-            processLine: null,
-            processNode: null
-        };
+
+        this.cache.select.processLine = null;
+        this.cache.select.processNode = null;
         this.cache.line = {
             start: null,
             end: null,
@@ -1394,9 +1404,11 @@
             nextNodeInfo,
             nodeId = nodeInfo.id,
             processId = node.parent().attr('data-id'),
-            isOut = false;
+            isOut = false,
+            stateIn = nodeInfo.state.in,
+            stateOut = nodeInfo.state.out;
 
-        if (!nodeInfo.state.out) {
+        if (!stateOut) {
             return false;
         }
 
@@ -1405,14 +1417,26 @@
             return true;
         }
 
-        //2.判断是否存在合件的状态
-        isOut = nodeInfo.back.length === 0 && this.hasProcessId(nodeInfo.state.out, processPath[processPath.length - 1], 'from');
+        //2.判断是否存在拆件的状态
+        isOut = nodeInfo.back.length === 0 &&
+            this.hasProcessId(stateOut, processPath[processPath.length - 1], 'from');
 
         if (!isOut) {
             return false;
         }
 
-        //3.在当前节点进行合件后立刻跳转的其他的装配线继续合件
+        //3-1.在当前节点进行合件后立刻拆件回原装配线
+        if (stateIn && stateOut && stateIn.length > 0 && stateOut.length > 0) {
+            for (var i = 0, leni = stateIn.length; i < leni; i++) {
+                for (var j = 0, lenj = stateOut.length; j < lenj; j++) {
+                    if (stateIn[i].process.from !== processId && stateIn[i].process.from && stateIn[i].process.from === stateOut[j].process.to) {
+                        return false;
+                    }
+                }
+            }
+
+        }
+        //3-2.在当前节点进行合件后立刻跳转的其他的装配线继续合件
         if (nodeInfo.state.in && nodeInfo.state.in.length === info.count - 1) {
             return true;
         }
@@ -1651,11 +1675,11 @@
             processId = node.parent().attr('data-id'),
             flow = this.cache.flow[processId],
             state = node.attr('data-state'),
-            attr = this.config.node.attr,
+            attr = this.config.node.cancelSelectAttr,
             toNode,
             length,
             i;
-
+  
         if (line.error) {
             this.paper.select('[data-id="' + line.error + '"] rect').attr(attr);
             line.error = null;
@@ -1668,6 +1692,9 @@
         }
         //合件工艺节点不允许拆件
         else if (line.start === null && state === 'in') {
+            this.renderErrorFlowline(node);
+        }
+        else if (line.start === null && flow.path.indexOf(id) === -1) {
             this.renderErrorFlowline(node);
         }
         else if (line.start === null) {

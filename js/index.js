@@ -339,6 +339,31 @@ $(function () {
         }
     ];
 
+    var flowline10 = [
+        {
+            start: '1073',
+            end: '1058'
+        },
+        {
+            start: '1058',
+            end: '1074'
+        },
+        {
+            start: '1075',
+            end: '1059'
+        }
+    ];
+
+    var flowline11 = [
+        {
+            start: '1040',
+            end: '1059'
+        },
+        {
+            start: '1049',
+            end: '1041'
+        }
+    ];
 
     var processflow1 = new Processflow({
         query: '#processflow1',
@@ -431,6 +456,25 @@ $(function () {
         data: {
             processflow: flows,
             flowline: flowline9
+        },
+        autoResize: true
+    });
+
+
+    var processflow10 = new Processflow({
+        query: '#processflow10',
+        data: {
+            processflow: flows,
+            flowline: flowline10
+        },
+        autoResize: true
+    });
+
+    var processflow11 = new Processflow({
+        query: '#processflow11',
+        data: {
+            processflow: flows,
+            flowline: flowline11
         },
         autoResize: true
     });
