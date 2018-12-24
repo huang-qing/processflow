@@ -201,6 +201,10 @@ $(function () {
         {
             start: '1059',
             end: '1074'
+        },
+        {
+            start: '1039',
+            end: '1060'            
         }
     ];
 
@@ -481,10 +485,10 @@ $(function () {
     });
 
 
-    // processflow1.load({
-    //     processflow: flows,
-    //     flowline: flowline1
-    // });
+    processflow1.load({
+        processflow: flows,
+        flowline: flowline1
+    });
 
 
 }());

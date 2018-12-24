@@ -26,7 +26,7 @@
         var i = 1;
 
         return function () {
-            return ''+i++;
+            return '' + i++;
         };
     }();
 
@@ -1371,14 +1371,6 @@
             this.renderLine(nextNode, info);
         }
 
-        // //多件合件，允许分支
-        // if (isOut && info.count > 1 &&
-        //     !(nodeInfo.state.in && nodeInfo.state.in.length === info.count - 1)) {
-        //     nextNode = this.getNextNode(node);
-        //     this.renderStraightLine(node, nextNode, info.id);
-        //     this.renderLine(nextNode, info);
-        // }
-
     };
 
     Flowline.prototype.analysisStateIn = function (node, info, nodeInfo) {
@@ -1406,7 +1398,9 @@
             processId = node.parent().attr('data-id'),
             isOut = false,
             stateIn = nodeInfo.state.in,
-            stateOut = nodeInfo.state.out;
+            stateOut = nodeInfo.state.out,
+            from,
+            to;
 
         if (!stateOut) {
             return false;
@@ -1425,20 +1419,18 @@
             return false;
         }
 
-        //3-1.在当前节点进行合件后立刻拆件回原装配线
-        if (stateIn && stateOut && stateIn.length > 0 && stateOut.length > 0) {
+        //3.在当前节点进行合件后立刻跳转的其他的装配线继续合件
+        if (nodeInfo.state.in && nodeInfo.state.out.length === 1 &&
+            nodeInfo.state.in.length === info.count - 1) {
+            from = [];
+            to = nodeInfo.state.out[0].process.to;
             for (var i = 0, leni = stateIn.length; i < leni; i++) {
-                for (var j = 0, lenj = stateOut.length; j < lenj; j++) {
-                    if (stateIn[i].process.from !== processId && stateIn[i].process.from && stateIn[i].process.from === stateOut[j].process.to) {
-                        return false;
-                    }
-                }
+                from.push(stateIn[i].process.from);
             }
 
-        }
-        //3-2.在当前节点进行合件后立刻跳转的其他的装配线继续合件
-        if (nodeInfo.state.in && nodeInfo.state.in.length === info.count - 1) {
-            return true;
+            if (from.indexOf(to) === -1) {
+                return true;
+            }
         }
 
         //4.在当前装配线进行过合件，本流程强制不执行拆件操作
@@ -1681,7 +1673,7 @@
             length,
             i,
             len;
-
+            
         if (line.error) {
             this.paper.select('[data-id="' + line.error + '"] rect').attr(attr);
             line.error = null;
@@ -1741,7 +1733,11 @@
         else {
             //排除重复连线
             for (i = 0, len = this.data.length; i < len; i++) {
-                if (this.data[i].start === line.start && this.data[i].end === id) {
+                if (this.data[i].start === line.start && flow.count === 1) {
+                    this.renderErrorFlowline(node);
+                    return;
+                }
+                else if (this.data[i].start === line.start && this.data[i].end === id) {
                     this.renderErrorFlowline(node);
                     return;
                 }
