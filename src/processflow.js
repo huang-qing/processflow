@@ -1714,10 +1714,7 @@
         }
         //存在拆合件的流程
         else if (line.start !== null && flow.brokenLine.length > 0) {
-            // //不允许在执行的流程前添加连线
-            // if(flow.path.length>0){
-            //     if(flow.path[flow])
-            // }
+
             length = flow.brokenLine.length;
             i = length % 2 === 0 ? length - 2 : length - 1;
             toNode = this.getNextNode(this.paper.select('[data-id="' + flow.brokenLine[i].start + '"]'));
