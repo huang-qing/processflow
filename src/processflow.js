@@ -383,6 +383,7 @@
 
         this.$componentContainer.append(this.$componentSvg);
         this.$processContainer.append(this.$processSvg);
+        this.$container.empty();
         this.$container.append(this.$componentContainer);
         this.$container.append(this.$processContainer);
         this.$container.addClass('processflow');
@@ -585,6 +586,11 @@
 
     Processflow.prototype.removeFlowLine = function () {
         this.cache.instance.flowline.removeFlowLine();
+    };
+
+    Processflow.prototype.destroy = function () {
+        this.$container.removeClass('processflow');
+        this.$container.empty();
     };
 
     function Panel(componentPaper, processPaper, data, config, x, y, cache) {
@@ -1204,6 +1210,9 @@
             nodeInfo,
             out;
 
+        if (!node) {
+            return;
+        }
         nodes = node.parent().selectAll('[data-path^="' + node.attr('data-path') + '"]');
         // 位移
         for (var i = 0, len = nodes.items.length; i < len; i++) {
@@ -1673,7 +1682,7 @@
             length,
             i,
             len;
-            
+
         if (line.error) {
             this.paper.select('[data-id="' + line.error + '"] rect').attr(attr);
             line.error = null;
@@ -1705,13 +1714,17 @@
         }
         //存在拆合件的流程
         else if (line.start !== null && flow.brokenLine.length > 0) {
+            // //不允许在执行的流程前添加连线
+            // if(flow.path.length>0){
+            //     if(flow.path[flow])
+            // }
             length = flow.brokenLine.length;
             i = length % 2 === 0 ? length - 2 : length - 1;
             toNode = this.getNextNode(this.paper.select('[data-id="' + flow.brokenLine[i].start + '"]'));
             //流程合件未拆回
             if (length % 2 === 1 || flow.processPath.length > 2) {
                 //判断流程中拆回件允许返回的节点，必须是最后一个合件节点之后的相邻节点
-                if (toNode.attr('data-id') == id) {
+                if (toNode&&toNode.attr('data-id') == id) {
                     this.renderEndFlowline(node);
                 }
                 else {
@@ -2051,6 +2064,11 @@
         }
 
         return info;
+    };
+
+    API.prototype.destroy = function () {
+        this.processflow.destroy();
+        delete this.processflow;
     };
 
     window.Processflow = API;
